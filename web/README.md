@@ -1,65 +1,52 @@
-# Label Studio
+# Modified Front-End
 
-Label Studio is a complex, NX-managed project divided into three main components:
+## Features Implemented
 
-## [Main App (`apps/labelstudio`)][lso]
-This is the primary application that consolidates all frontend framework elements. It's the hub for integrating and managing the different libraries and functionalities of Label Studio.
+Currently the modified frontend provides following features:
 
-## [Library - Label Studio Frontend (`libs/editor`)][lsf]
-Label Studio Frontend, developed with React and mobx-state-tree, is a robust frontend library tailored for data annotation. It's designed for seamless integration into your applications, providing a rich set of features for data handling and visualization. Customization and extensibility are core aspects, allowing for tailored annotation experiences.
+-  ### Allow labels to be filtered and selected
 
-## [Library - Datamanager (`libs/datamanager`)][dm]
-Datamanager is an advanced tool specifically for data exploration within Label Studio. Key features include:
+	This feature allows users to select `labels` dynamically on the `video-audio` page. There is a new button added which says 'Add Label'. Upon clicking the button, a modal will open. The modal contains a searchable, `select` field. Users can search and select multiple labels through the field and after the selection, click on 'Apply Selection'. This will override current config and selected labels shall be available to be selected for region drawing.
 
-<img align="right" height="180" src="https://github.com/heartexlabs/label-studio/blob/master/images/heartex_icon_opossum_green@2x.png?raw=true" />
+	### NOTE: 
+	##### To get the above feature working, following steps must be followed and ensured:
 
-## Installation Instructions
+*	When Creating a new `Project`, in the project `Settings` select `Labeling Interface` and go to `code` display of the interface. In the code section paste following code and hit `save`:
 
-1 - **Dependencies Installation:**
-- Execute `yarn install --frozen-lockfile` to install all necessary dependencies.
+```xml
+	<View>
+		<Header value="Video timeline segmentation via Audio sync trick"/>
+		<Video name="video" value="$video" sync="audio"></Video>
+		<Labels name="tricks" toName="audio" choice="multiple">
+			<Label value=""/>
+		</Labels>
+		<Audio name="audio" value="$video" sync="video" zoom="true" speed="true" volume="true"/>
+	</View>
+```
+	* This is only one time process when the project is newly created.
 
-2 - **Environment Configuration:**
-#### Custom Configuration for DataManager:
-- If you need to customize the configuration specifically for DataManager, follow these steps:
-  - Duplicate the `.env.example` file located in the DataManager directory and rename the copy to `.env`.
-  - Make your desired changes in this new `.env` file. The key configurations to consider are:
-      - `NX_API_GATEWAY`: Set this to your API root. For example, `https://localhost:8080/api/dm`.
-      - `LS_ACCESS_TOKEN`: This is the access token for Label Studio, which can be obtained from your Label Studio account page.
-- This process allows you to have a customized configuration for DataManager, separate from the default settings in the .env.local files.
+-  ### Frame by frame shortcut keys
 
-## Usage Instructions
-### Key Development and Build Commands
-- **Label Studio App:**
-    - `yarn ls:watch`: Build the main Label Studio app continuously for development.
-- **Label Studio Frontend (Editor):**
-    - `yarn lsf:watch`: Continuously build the frontend editor.
-    - `yarn lsf:serve`: Run the frontend editor standalone.
-- **Datamanager**
-    - `yarn dm:watch`: Continuously build Datamanager.
-- **General Build**
-    - `yarn build`: Build all apps and libraries in the project.
+	This feature enables users to seek through the `video` seek bar 'Frame by Frame'. Users can go one frame forward by pressing `e`, and can go one frame backward by pressing `q` on a video. If a `hop` is required then users can hold `Shift` key and press `q` or `e` to go `10 Frames` backwards or forwards respectively. NOTE: users can change the default `hope` size from the settings menu, available in the bottom bar.
+
+-  ### Shortcut keys for start and end region
+
+	This feature enables users to start a region on the audio timeline and then moving forward from the starting point, when desired, end the region; by using shortcut key instead on mouse drawing. To achieve that, users can start a region by pressing `w` key and then move the seek cursor on desired postion and again press `w` key to mark the region end. As soon as region end is marked, the region will be drawn, just as normally as mouse drag draws.
 
 
-## Ecosystem
+# Docker Setup Guide
 
-| Project                          | Description |
-|----------------------------------|-|
-| [label-studio][lso]              | Server part, distributed as a pip package |
-| [label-studio-frontend][lsf]     | Frontend part, written in JavaScript and React, can be embedded into your application |
-| [label-studio-converter][lsc]    | Encode labels into the format of your favorite machine learning library |
-| [label-studio-transformers][lst] | Transformers library connected and configured for use with label studio |
-| [datamanager][dm]                | Data exploration tool for Label Studio |
+- Make `mydata` directory at root of project  
+```sh
+	mkdir mydata
+```
+- Change ownership of `mydata` directory recursively  
+```sh
+	sudo chown -R 1001:root mydata
+```
+- Run docker compose  
+```
+	docker compose up --build
+```
 
-## License
-
-This software is licensed under the [Apache 2.0 LICENSE](../LICENSE) © [HumanSignal](https://www.humansignal.com/). 2020
-
-<img src="https://github.com/heartexlabs/label-studio/blob/master/images/opossum_looking.png?raw=true" title="Hey everyone!" height="140" width="140" />
-
-[lsc]: https://github.com/heartexlabs/label-studio-converter
-[lst]: https://github.com/heartexlabs/label-studio-transformers
-
-[lsf]: libs/editor/README.md
-[dm]: libs/datamanager/README.md
-[lso]: apps/labelstudio/README.md
-
+ 

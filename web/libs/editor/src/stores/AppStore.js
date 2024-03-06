@@ -30,6 +30,11 @@ import { destroy as destroySharedStore } from '../mixins/SharedChoiceStore/mixin
 
 const hotkeys = Hotkey('AppStore', 'Global Hotkeys');
 
+const tagsObj = types.model({
+  id: types.integer,
+  value: types.optional(types.string, '')
+});
+
 export default types
   .model('AppStore', {
     /**
@@ -37,6 +42,10 @@ export default types
      */
     config: types.string,
 
+    /**
+     * Custom array
+     */
+    labelsData: types.array(tagsObj),
     /**
      * Task with data, id and project
      */
@@ -156,6 +165,8 @@ export default types
     queueTotal: types.optional(types.number, 0),
 
     queuePosition: types.optional(types.number, 0),
+    /**Start Seek position used to create regions on audio with hotkey */
+    htkRegionStart: types.optional(types.number, 0),
   })
   .preProcessSnapshot((sn) => {
     // This should only be handled if the sn.user value is an object, and converted to a reference id for other
@@ -233,6 +244,23 @@ export default types
   }))
   .actions(self => {
     let appControls;
+
+    function changeHtkRegionStart(val){
+      self.htkRegionStart = val;
+    }
+
+    function addLabel(labels = []){
+      if(labels.length > 0){
+        self.labelsData = labels;
+      }
+      else {
+        const randomLabel = {
+          id: self.labelsData.length+1,
+          value: `Random Label at ${new Date().getHours()}:${new Date().getMinutes()}:${new Date().getSeconds()}`
+        };
+        self.labelsData.push(randomLabel);
+      }
+    }
 
     function setAppControls(controls) {
       appControls = controls;
@@ -494,6 +522,23 @@ export default types
 
       self.config = config;
       cs.initRoot(self.config);
+    }
+
+    function reAssignConfig(config){
+      destroy(self.annotationStore.root);
+      const cs = self.annotationStore;
+      
+      self.config = config;
+      cs.initRoot(self.config)
+    }
+
+    function reAssignConfigLbl(config){
+      // destroy(self.annotationStore.root);
+      const cs = self.annotationStore;
+      
+      // self.config = config;
+      cs.updateLabels(config);
+      // self.attachHotkeys();
     }
 
     /* eslint-disable no-unused-vars */
@@ -856,6 +901,9 @@ export default types
     }
 
     return {
+      addLabel,
+      changeHtkRegionStart,
+
       setFlags,
       addInterface,
       hasInterface,
@@ -864,6 +912,8 @@ export default types
       afterCreate,
       assignTask,
       assignConfig,
+      reAssignConfig,
+      reAssignConfigLbl,
       resetState,
       resetAnnotationStore,
       initializeStore,
