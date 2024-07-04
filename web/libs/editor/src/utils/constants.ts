@@ -1,6 +1,6 @@
 const PROD_BASE_URL = 'https://mobile.highqfit.com/workout_svc/';
 const DEV_BASE_URL = 'http://localhost:9898/'; // 'https://y6an25l59g.execute-api.us-east-1.amazonaws.com/dev/';//'http://localhost:5858/'; // 'https://y6an25l59g.execute-api.us-east-1.amazonaws.com/dev/';
-export const BASE_URL_VIDEO = DEV_BASE_URL; //PROD_BASE_URL;
+export const BASE_URL_VIDEO = PROD_BASE_URL;
 export const VIDEO_CUSTOM_ID_PREFIX = 'labeling-video';
 /**
  * Fallback WORKOUT ID, used in sending requests, if data-manager fails to extract a valid ID.
