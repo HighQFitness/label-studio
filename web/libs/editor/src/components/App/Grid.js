@@ -176,6 +176,7 @@ export default class Grid extends Component {
               {isFF(FF_DEV_3391)
                 ? <Annotation root={this.props.root} annotation={c} />
                 : !this.state.loaded.has(c.id) && (
+                  selected ? <Annotation root={this.props.root} annotation={c} />:
                   <div style={{
                     top: 0,
                     left: 0,

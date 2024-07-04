@@ -4,6 +4,8 @@ export const APIConfig = {
   endpoints: {
     /** Project base info */
     project: "/project",
+    // updateProject: "PATCH:/projects/:pk",
+    updateProject: {path:"/../projects/:pk", method: "patch"},
 
     /** users list */
     users: "/../users",
@@ -55,6 +57,9 @@ export const APIConfig = {
 
     /** Single task (sample) */
     task: "/tasks/:taskID",
+
+    /** update task's offset in meta */
+    updateOffset: {path:"/../tasks/:taskId", method: "patch"},
 
     /** Next task (labelstream, default sequential) */
     nextTask: "/tasks/next",

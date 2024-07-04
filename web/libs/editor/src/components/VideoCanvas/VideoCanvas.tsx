@@ -27,6 +27,9 @@ type VideoProps = {
   brightness?: number,
   saturation?: number,
 
+  pseudoLoading?: boolean,
+  customIdPrefix?: string,
+
   onPlay?: () => void,
   onPause?: () => void,
   onClick?: () => void,
@@ -37,6 +40,7 @@ type VideoProps = {
   onEnded?: () => void,
   onResize?: (dimensions: VideoDimentions) => void,
   onError?: (error: any) => void,
+  setPseudoLoading?: (val: boolean) => void,
 }
 
 type PanOptions = {
@@ -100,7 +104,7 @@ export const VideoCanvas = memo(forwardRef<VideoRef, VideoProps>((props, ref) =>
   const canvasHeight = useMemo(() => props.height ?? 600, [props.height]);
 
   const framerate = props.framerate ?? 29.97;
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true || Boolean(props.pseudoLoading));
   const [length, setLength] = useState(0);
   const [currentFrame, setCurrentFrame] = useState(props.position ?? 1);
   const [playing, setPlaying] = useState(false);
@@ -163,7 +167,7 @@ export const VideoCanvas = memo(forwardRef<VideoRef, VideoProps>((props, ref) =>
     } catch (e) {
       console.log('Error rendering video', e);
     }
-  }, [videoDimensions, zoom, pan, filters, canvasWidth, canvasHeight]);
+  }, [videoDimensions, zoom, pan, filters, canvasWidth, canvasHeight, props.width]);
 
   const updateFrame = useCallback((force = false) => {
     if (!contextRef.current) return;
@@ -257,6 +261,11 @@ export const VideoCanvas = memo(forwardRef<VideoRef, VideoProps>((props, ref) =>
   };
 
   useEffect(() => {
+    setLoading(Boolean(props.pseudoLoading));
+  }, 
+  [props.pseudoLoading]);
+
+  useEffect(() => {
     if (!playing) {
       drawVideo();
     }
@@ -339,7 +348,7 @@ export const VideoCanvas = memo(forwardRef<VideoRef, VideoProps>((props, ref) =>
 
   useEffect(() => {
     drawVideo();
-  }, [filters, zoom, pan, canvasWidth, canvasHeight]);
+  }, [filters, zoom, pan, canvasWidth, canvasHeight, props.width]);
 
   useEffect(() => {
     const observer = new ResizeObserver(() => {
@@ -452,6 +461,7 @@ export const VideoCanvas = memo(forwardRef<VideoRef, VideoProps>((props, ref) =>
 
       if (supportedFileTypeRef.current === false) {
         setLoading(false);
+        props.setPseudoLoading?.(false);
         return;
       }
 
@@ -472,6 +482,7 @@ export const VideoCanvas = memo(forwardRef<VideoRef, VideoProps>((props, ref) =>
           setVideoDimensions(dimensions);
           setLength(length);
           setLoading(false);
+          props?.setPseudoLoading?.(false);
           updateFrame(true);
 
           props.onLoad?.({
@@ -574,6 +585,7 @@ export const VideoCanvas = memo(forwardRef<VideoRef, VideoProps>((props, ref) =>
         onWaiting={handleVideoWaiting}
         onEnded={handleVideoEnded}
         onError={handleVideoError}
+        customIdPrefix={props.customIdPrefix}
       />
     </Block>
   );

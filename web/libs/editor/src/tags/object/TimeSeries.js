@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import * as d3 from 'd3';
 import { inject, observer } from 'mobx-react';
 import { getEnv, getRoot, getType, types } from 'mobx-state-tree';
@@ -805,7 +805,9 @@ const HtxTimeSeriesViewRTS = ({ item }) => {
     if (item?.brushRange?.length) {
       item._nodeReference = ref.current;
     }
-  }, [item, ref]);
+  }, [item, ref, item.dataObj]);
+
+  if (!item.dataObj || (item.dataObj && item.dataObj[Object.keys(item.dataObj)[0]].length <=2) || (!item?.brushRange?.length || !item.data)) return null;
 
   // the last thing updated during initialisation
   if (!item?.brushRange?.length || !item.data)

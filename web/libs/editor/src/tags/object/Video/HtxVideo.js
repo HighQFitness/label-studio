@@ -18,8 +18,16 @@ import ResizeObserver from '../../../utils/resize-observer';
 import { clamp, isDefined } from '../../../utils/utilities';
 import './Video.styl';
 import { VideoRegions } from './VideoRegions';
+import { VideoThumbnails } from '../../control/VideoThumbnails/VideoThumbnails';
+import { VIDEO_CUSTOM_ID_PREFIX, TEMP_WORKOUT_ID } from './../../../utils/constants';
+import { onSnapshot } from 'mobx-state-tree';
+import { AudioHiddenIcon, AudioVisibleIcon, LabelsIcon, VideoOptionsIcon } from '../../../utils/custom-icons';
+import { Tooltip } from '../../../common/Tooltip/Tooltip';
+import { difference } from 'd3';
 
 const isFFDev2715 = isFF(FF_DEV_2715);
+
+// const WORKOUT_ID = TEMP_WORKOUT_ID; // '749cfcdc-3b07-4f04-a04c-5c9d2c3d4bb5'; // 'e80c0e88-8618-42c7-99a5-389f0c50ffd7';
 
 function useZoom(videoDimensions, canvasDimentions, shouldClampPan) {
   const [zoomState, setZoomState] = useState({ zoom: 1, pan: { x: 0, y: 0 } });
@@ -102,6 +110,16 @@ function useZoom(videoDimensions, canvasDimentions, shouldClampPan) {
 const HtxVideoView = ({ item, store }) => {
   if (!item._value) return null;
 
+  const WORKOUT_ID = store?.workoutId?.length ? store?.workoutId : TEMP_WORKOUT_ID;
+
+  const [loadingThumbnails, setLoadingThumbnails] = useState(store.tasksDataListOptionsLoading.flag);
+
+  const [tagHeight, setTagHeight] = useState(600);
+  const [originalVideoRatio, setOriginalVideoRatio] = useState(1);
+  const [isAudioVisible, setIsAudioVisible] = useState(store.shouldShowAudioWave.flag);
+  const [showThumbnails, setShowThumbnails] = useState(store.showVideoOptions.flag);
+  const [labelLoading, setLabelLoading] = useState(false);
+
   const limitCanvasDrawingBoundaries = !store.settings.videoDrawOutside;
   const videoBlockRef = useRef();
   const stageRef = useRef();
@@ -111,6 +129,8 @@ const HtxVideoView = ({ item, store }) => {
   const [videoLength, _setVideoLength] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [position, _setPosition] = useState(1);
+
+  const [pseudoLoading, setPseudoLoading] = useState(false);
 
   const [videoSize, setVideoSize] = useState(null);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0, ratio: 1 });
@@ -129,6 +149,28 @@ const HtxVideoView = ({ item, store }) => {
     onExitFullscreen() { exitFullscren(); },
   });
 
+  onSnapshot(store.tasksDataListOptionsLoading, snap => {
+    setLoadingThumbnails(snap.flag);
+  })
+
+  useEffect(() => {
+    if (store.workoutId && store.workoutId !== "undefined") {
+      // console.info('selected task meta: ', store.taskMeta);
+      store.fetchVideoOptions(store.workoutId);
+    }
+    // REMOVE; following lines for demo purposes to avoid remote video loading
+    // if (!store.tasksDataListOptions.some(itm => (itm.video === item._value && itm.title === 'default'))) {
+    //   store.unshiftVideoOptions({video: item._value, title: 'default'});
+    // }
+  },[store.workoutId]);
+
+  const getCurrentPosition = () => {
+    return position;
+  };
+  const getCurrentVideoLength = () => {
+    return videoLength;
+  };
+
   const setPosition = useCallback((value) => {
     if (value !== position) {
       const nextPosition = clamp(value, 1, videoLength);
@@ -144,6 +186,12 @@ const HtxVideoView = ({ item, store }) => {
   const supportsRegions = useMemo(() => {
     return isDefined(item?.videoControl());
   }, [item]);
+
+  useEffect(() => {
+    if (item.ref.current) {
+      store.videoRefChanged();
+    }
+  },[item.ref, item.ref.current]);
 
   useEffect(() => {
     const container = videoContainerRef.current;
@@ -280,10 +328,10 @@ const HtxVideoView = ({ item, store }) => {
 
   const zoomToFit = useCallback(() => {
     setZoomAndPan({
-      zoom: item.ref.current.videoDimensions.ratio,
+      zoom: originalVideoRatio, // item.ref.current.videoDimensions.ratio,
       pan: { x: 0, y: 0 },
     });
-  }, []);
+  }, [originalVideoRatio]);
 
   const zoomReset = useCallback(() => {
     setZoomAndPan({
@@ -364,7 +412,6 @@ const HtxVideoView = ({ item, store }) => {
     });
   }, []);
 
-
   const handleSelectRegion = useCallback((_, id, select) => {
     const region = item.findRegion(id);
     const selected = region?.selected || region?.inSelection;
@@ -395,8 +442,8 @@ const HtxVideoView = ({ item, store }) => {
     });
   }, [item.regs]);
 
-  const handleTimelinePositionChange = useCallback((newPosition) => {
-    if (position !== newPosition) {
+  const handleTimelinePositionChange = useCallback((newPosition, updateAnyways = false) => {
+    if (updateAnyways || position !== newPosition) {
       item.setFrame(newPosition);
       setPosition(newPosition);
     }
@@ -424,66 +471,166 @@ const HtxVideoView = ({ item, store }) => {
     };
   });
 
+
+  const handleAfterSrcUpdate = (updatePos) => {
+    setTimeout(() => {
+      const vdoLength = getCurrentVideoLength();
+      const clampedValue = clamp(updatePos, 1, vdoLength);
+      handleTimelinePositionChange(clampedValue, true);
+      setPseudoLoading(false);
+    }, 500);
+  };
+
+  useEffect(() => {
+    if (!isNaN(Number(item.ref?.current?.videoDimensions?.ratio)) && !(originalVideoRatio < 1)) {
+      setOriginalVideoRatio(item.ref.current.videoDimensions.ratio ?? 1);
+    }
+  }, [item.ref?.current]);
+
+  useEffect(() => {
+    if (item?.ref?.current?.videoDimensions) setTagHeight(isNaN(Number(item?.ref?.current?.videoDimensions.height) * (zoom)) ? 600 : Number(item?.ref?.current?.videoDimensions?.height)  * (zoom));
+  }, [zoom]);
+
+  onSnapshot(store.showVideoOptions, (sna) => {
+    setShowThumbnails(sna.flag);
+  });
+
+  onSnapshot(store.shouldShowAudioWave, (snap) => {
+    setIsAudioVisible(snap.flag);
+  });
+
+  onSnapshot(store.labelOptLoading, snap => {
+    setLabelLoading(snap.flag);
+  });
+
+  // useEffect(()=> {
+  //   console.log('Offset changed Video', store.offset)
+  // }, [store.offset]);
+
+  useEffect(()=> {
+    try {
+      if (store.taskMeta && Object.keys(JSON.parse(store.taskMeta)).length) {
+        if (JSON.parse(store.taskMeta)?.workout_id && JSON.parse(store.taskMeta)?.workout_id !== WORKOUT_ID) {
+          fetchVideoOptions(JSON.parse(store.taskMeta)?.workout_id);
+        }
+    } 
+    }catch (err) {
+      console.error(err);
+    }
+  }, [store.taskMeta]);
+
+  const [calculatedWidth, setCalculatedWidth] = useState(null);
+  const CANVAS_WIDTH_FACTOR = 225;
+  const [rootElemWidth, setRootElemWidth] = useState(0);
+
+  useEffect(() => {
+    const rootEl = document.getElementById('htx-video-root-el');
+        const containerWidth = rootEl?.clientWidth;
+        if ((!isNaN(Number(containerWidth))) && rootElemWidth !== containerWidth) setRootElemWidth(containerWidth);
+    if (videoDimensions && videoDimensions.width > 0) {
+      if (showThumbnails) {
+        const widthCalc = ( videoDimensions.width >= containerWidth ? containerWidth - (CANVAS_WIDTH_FACTOR + 70) : (videoDimensions.width - CANVAS_WIDTH_FACTOR));
+        if (calculatedWidth !== widthCalc) setCalculatedWidth(widthCalc);
+      } else {
+        const remainingWidth = containerWidth - calculatedWidth;
+        const difference = remainingWidth > 0 ? remainingWidth :  (CANVAS_WIDTH_FACTOR);
+        const newWidth = containerWidth ?? (videoDimensions.width + difference);
+        if (calculatedWidth !== videoDimensions.width) setCalculatedWidth(newWidth);
+      }
+    } else {
+      if (containerWidth) setCalculatedWidth(containerWidth - (CANVAS_WIDTH_FACTOR + 75));
+    }
+  }, [showThumbnails, videoSize]);
+
+
   return (
-    <ObjectTag item={item}>
+    <ObjectTag item={item} style={{ width: '100%' }}>
+      <div id="htx-video-root-el" style={{ width: '100%', minHeight: `${ videoSize ? videoSize[1] : 50 }px` }}>
       <Block name="video-segmentation" ref={mainContentRef} mod={{ fullscreen: isFullScreen }}>
         {item.errors?.map((error, i) => (
           <ErrorMessage key={`err-${i}`} error={error} />
         ))}
 
-        <Block name="video" mod={{ fullscreen: isFullScreen }} ref={videoBlockRef}>
-          <Elem
-            name="main"
-            ref={videoContainerRef}
-            style={{ height: Number(item.height) }}
-            onMouseDown={handlePan}
-            onWheel={onZoomChange}
-          >
-            {videoSize && (
-              <>
-                {loaded && supportsRegions && (
-                  <VideoRegions
-                    item={item}
+  
+        <div style={{ width: '100%',display: `${ Number(tagHeight) && (videoSize && videoSize[1]) ? 'flex' : 'block'}`, justifyContent: 'center', alignItems: 'stretch', flexDirection: 'row-reverse', minHeight: `${ videoSize ? videoSize[1] : 50 }px` }}>
+          <Block name="video" mod={{ fullscreen: isFullScreen }} ref={videoBlockRef}>
+            <Elem
+              name="main"
+              ref={videoContainerRef}
+              // style={{ height: Number(item.height) }}
+              style={{ height: Number(tagHeight)}}
+              onMouseDown={handlePan}
+              onWheel={onZoomChange}
+            >
+              {videoSize && (
+                <>
+                  {loaded && supportsRegions && (
+                    <VideoRegions
+                      item={item}
+                      zoom={zoom}
+                      pan={pan}
+                      locked={panMode}
+                      regions={item.regs}
+                      width={calculatedWidth ?? videoSize[0] + CANVAS_WIDTH_FACTOR}
+                      // width={videoSize[0]}
+                      // width={width}
+                      height={videoSize[1]}
+                      // height={height}
+                      workingArea={videoDimensions}
+                      allowRegionsOutsideWorkingArea={!limitCanvasDrawingBoundaries}
+                      stageRef={stageRef}
+                    />
+                  )}
+                  <VideoCanvas
+                    ref={item.ref}
+                    src={item._value}
+                    width={calculatedWidth ?? videoSize[0]}
+                    // width={videoSize[0]}
+                    // width={width}
+                    height={videoSize[1]}
+                    // height={height}
+                    muted={true}
                     zoom={zoom}
                     pan={pan}
-                    locked={panMode}
-                    regions={item.regs}
-                    width={videoSize[0]}
-                    height={videoSize[1]}
-                    workingArea={videoDimensions}
-                    allowRegionsOutsideWorkingArea={!limitCanvasDrawingBoundaries}
-                    stageRef={stageRef}
+                    speed={item.speed}
+                    framerate={item.framerate}
+                    allowInteractions={false}
+                    allowPanOffscreen={!limitCanvasDrawingBoundaries}
+                    onFrameChange={handleFrameChange}
+                    onLoad={handleVideoLoad}
+                    onResize={handleVideoResize}
+                    // onClick={togglePlaying}
+                    onEnded={handleVideoEnded}
+                    onPlay={handlePlay}
+                    onPause={handlePause}
+                    onSeeked={item.handleSeek}
+                    pseudoLoading={pseudoLoading}
+                    setPseudoLoading={setPseudoLoading}
+                    customIdPrefix={VIDEO_CUSTOM_ID_PREFIX}
                   />
-                )}
-                <VideoCanvas
-                  ref={item.ref}
-                  src={item._value}
-                  width={videoSize[0]}
-                  height={videoSize[1]}
-                  muted={item.muted}
-                  zoom={zoom}
-                  pan={pan}
-                  speed={item.speed}
-                  framerate={item.framerate}
-                  allowInteractions={false}
-                  allowPanOffscreen={!limitCanvasDrawingBoundaries}
-                  onFrameChange={handleFrameChange}
-                  onLoad={handleVideoLoad}
-                  onResize={handleVideoResize}
-                  // onClick={togglePlaying}
-                  onEnded={handleVideoEnded}
-                  onPlay={handlePlay}
-                  onPause={handlePause}
-                  onSeeked={item.handleSeek}
-                />
-              </>
-            )}
-          </Elem>
-        </Block>
+                </>
+              )}
+            </Elem>
+          </Block>
+          <div id="thumbnails-options">
+            <VideoThumbnails
+              item={item}
+              store={store}
+              setPseudoLoading={setPseudoLoading}
+              getCurrentPosition={getCurrentPosition}
+              handleAfterSrcUpdate={handleAfterSrcUpdate}
+              showThumbnails={showThumbnails}
+              videoSize={videoSize}
+              rootElemWidth={rootElemWidth}
+              optionsLoading={loadingThumbnails}
+            />
+          </div>
+        </div>
 
         {loaded && (
           <Elem
             name="timeline"
+            customIdPrefix={VIDEO_CUSTOM_ID_PREFIX}
             tag={Timeline}
             playing={playing}
             length={videoLength}
@@ -518,6 +665,84 @@ const HtxVideoView = ({ item, store }) => {
                   );
                 },
               },
+              // {
+              //   position: 'right',
+              //   component: () => {
+              //     return (<Tooltip key="t-t-video-options" title={
+              //       store.tasksDataListOptions.length === 0 ? 'No video options to show'
+              //       :
+              //       showThumbnails ? 'Hide' : 'Show video options'
+              //     }>
+              //       <Button
+              //       key='btn-video-options-toggle'
+              //       onClick={() => {
+              //         store.setShowVideoOptions(!showThumbnails);
+              //       }}
+              //       style={{ minWidth: 'fit-content', whiteSpace: 'nowrap', margin: 'auto 0.85rem' }}
+              //     >
+              //       <div style={{ width: '1.5rem' }}>
+              //         <VideoOptionsIcon />
+              //       </div>
+              //     </Button>
+              //     </Tooltip>)
+              //   }
+              // },
+              {
+                position: 'left',
+                component: () => {
+                  return (
+                    <Tooltip key="t-t-labels-btn" title={labelLoading ? 'Fetching Labels' : 'Add Labels'}>
+                      <Button
+                        style={{ minWidth: 'fit-content', whiteSpace: 'nowrap', marginInline: '0.85rem' }}
+                        onClick={() => {
+                          if (labelLoading) return;
+                          store.setShowLabelsModal(true)
+                        }}
+                      >
+                        <div style={{ width: '1.5rem', height: 'auto'}}>
+                          {labelLoading ? <Block name="spinner" style={{ width: '24px', height: '24px' }}/> : <LabelsIcon />}
+                        </div>
+                      </Button>
+                    </Tooltip>
+                  )
+                }
+              },
+              {
+                position: 'right',
+                component: () => {
+                  return (
+                    <div key="custom-btn-tray" style={{ marginInline: '25px', display:'flex', alignItems: 'center', columnGap: '16px' }}>
+                      <Tooltip key="t-t-video-options" title={
+                        store.tasksDataListOptions.length === 0 ? 'No video options to show'
+                        :
+                        showThumbnails ? 'Hide' : 'Show video options'
+                      }>
+                        <Button
+                          key='btn-video-options-toggle'
+                          onClick={() => {
+                            store.setShowVideoOptions(!showThumbnails);
+                          }}
+                          style={{ minWidth: 'fit-content', whiteSpace: 'nowrap' }}
+                        >
+                          <div style={{ width: '1.5rem' }}>
+                            <VideoOptionsIcon />
+                          </div>
+                        </Button>
+                      </Tooltip>
+                      <Tooltip key="t-t-toggle-audio-wave-btn" title={isAudioVisible ? 'Hide Audio' : 'Show Audio'}>
+                        <Button
+                          style={{ minWidth: 'fit-content', whiteSpace: 'nowrap' }}
+                          onClick={() => store.setShouldShowAudioWave(!isAudioVisible)}
+                        >
+                          <div style={{ width: '1.5rem', height: 'auto'}}>
+                            {isAudioVisible ? <AudioVisibleIcon /> : <AudioHiddenIcon />}
+                          </div>
+                        </Button>
+                      </Tooltip>
+                    </div>
+                  )
+                }
+              },
             ]}
             onPositionChange={handleTimelinePositionChange}
             onPlay={handlePlay}
@@ -528,6 +753,7 @@ const HtxVideoView = ({ item, store }) => {
           />
         )}
       </Block>
+      </div>
     </ObjectTag>
   );
 };

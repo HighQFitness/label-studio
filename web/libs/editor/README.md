@@ -1,24 +1,52 @@
-# Label Studio Frontend
+# Modified Front-End
 
-Label Studio Frontend (LSF) is a crucial module of the Label Studio ecosystem, pivotal in driving the entire annotation flow. It's a front-end-only module, combining a user interface for annotation creation with a data layer that standardizes the annotation format. Every manual annotation in Label Studio has been crafted using LSF, making it integral to the system.
+## Features Implemented
 
-### Usage Instructions
+Currently the modified frontend provides following features:
 
-LSF provides specific scripts for operation and testing:
+-  ### Allow labels to be filtered and selected
 
-_Important Note: These scripts must be executed within the web folder or its subfolders. This is crucial for the scripts to function correctly, as they are designed to work within the context of the web directory's structure and dependencies._
+	This feature allows users to select `labels` dynamically on the `video-audio` page. There is a new button added which says 'Add Label'. Upon clicking the button, a modal will open. The modal contains a searchable, `select` field. Users can search and select multiple labels through the field and after the selection, click on 'Apply Selection'. This will override current config and selected labels shall be available to be selected for region drawing.
 
-- **`yarn lsf:watch`: Build LSF continuously**
-  - Crucial for development, this script continuously builds Label Studio Frontend (LSF), allowing developers to observe their changes in real-time within the Label Studio environment.
-- **`yarn lsf:serve`: Run LSF standalone**
-  - To run Label Studio Frontend in standalone mode. Visit http://localhost:3000 to use the application in standalone mode.
-- **`yarn lsf:e2e`: Execute end-to-end (e2e) tests on LSF**
-  - To run comprehensive e2e tests, ensuring the frontend works as expected from start to finish. The Label Studio environment must be running, typically at `http://localhost:8080`.
-- **`yarn lsf:integration`: Run integration tests**
-  - To conduct integration tests using Cypress, verifying that different parts of LSF work together correctly. The LSF in standalone mode (`yarn lsf:serve`) must be running.
-- **`yarn lsf:integration:ui`: Run integration tests in UI mode**
-  - Facilitates debugging during integration tests by running them in a UI mode, allowing you to visually track what is being tested. The LSF in standalone mode (`yarn lsf:serve`) must be running.
-- **`yarn lsf:unit`: Run unit tests on LSF**
-  - Essential for maintaining code quality and reliability, especially in collaborative development.
+	### NOTE: 
+	##### To get the above feature working, following steps must be followed and ensured:
 
-<img src="https://github.com/heartexlabs/label-studio/blob/master/images/opossum_looking.png?raw=true" title="Hey everyone!" height="140" width="140" />
+*	When Creating a new `Project`, in the project `Settings` select `Labeling Interface` and go to `code` display of the interface. In the code section paste following code and hit `save`:
+
+```xml
+	<View>
+		<Header value="Video timeline segmentation via Audio sync trick"/>
+		<Video name="video" value="$video" sync="audio"></Video>
+		<Labels name="tricks" toName="audio" choice="multiple">
+			<Label value=""/>
+		</Labels>
+		<Audio name="audio" value="$video" sync="video" zoom="true" speed="true" volume="true"/>
+	</View>
+```
+	* This is only one time process when the project is newly created.
+
+-  ### Frame by frame shortcut keys
+
+	This feature enables users to seek through the `video` seek bar 'Frame by Frame'. Users can go one frame forward by pressing `e`, and can go one frame backward by pressing `q` on a video. If a `hop` is required then users can hold `Shift` key and press `q` or `e` to go `10 Frames` backwards or forwards respectively. NOTE: users can change the default `hope` size from the settings menu, available in the bottom bar.
+
+-  ### Shortcut keys for start and end region
+
+	This feature enables users to start a region on the audio timeline and then moving forward from the starting point, when desired, end the region; by using shortcut key instead on mouse drawing. To achieve that, users can start a region by pressing `w` key and then move the seek cursor on desired position and again press `w` key to mark the region end. As soon as region end is marked, the region will be drawn, just as normally as mouse drag draws.
+
+
+# Docker Setup Guide
+
+- Make `mydata` directory at root of project  
+```sh
+	mkdir mydata
+```
+- Change ownership of `mydata` directory recursively  
+```sh
+	sudo chown -R 1001:root mydata
+```
+- Run docker compose  
+```
+	docker compose up --build
+```
+
+ 

@@ -120,6 +120,7 @@ const TimelineComponent: FC<TimelineProps> = ({
     }
   }, [position, length]);
 
+
   const controls = (
     <Elem name="topbar">
       <Controls
@@ -155,6 +156,7 @@ const TimelineComponent: FC<TimelineProps> = ({
           />
         ) : null}
         mediaType="timeline"
+        customIdPrefix={props.customIdPrefix}
       />
 
       {allowSeek && (
@@ -220,6 +222,17 @@ const TimelineComponent: FC<TimelineProps> = ({
             {controls}
           </>
         )}
+        {/* <span
+            id={`${props.customIdPrefix ?? ''}-hidden-elem-to-set-position`}
+            onClick={(e: MouseEvent, pos: number) => {
+              console.log('onClick pos', pos);
+              console.log('onClick e', e);
+              if (pos) {
+                setInternalPosition(pos);
+              }
+            }}
+            style={{ display: 'none' }}
+      /> */}
       </Block>
     </TimelineContextProvider>
   );

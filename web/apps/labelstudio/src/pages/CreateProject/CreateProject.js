@@ -16,6 +16,7 @@ import { EnterpriseBadge } from '../../components/Badges/Enterprise';
 import { Caption } from '../../components/Caption/Caption';
 import { FF_LSDV_E_297, isFF } from '../../utils/feature-flags';
 import { createURL } from '../../components/HeidiTips/utils';
+import { DEFAULT_CONFIG } from './utils/configurattion-constant';
 
 
 const ProjectName = ({ name, setName, onSaveName, onSubmit, error, description, setDescription, show = true }) => !show ? null : (
@@ -67,7 +68,7 @@ export const CreateProject = ({ onClose }) => {
   const [name, setName] = React.useState("");
   const [error, setError] = React.useState();
   const [description, setDescription] = React.useState("");
-  const [config, setConfig] = React.useState("<View></View>");
+  const [config, setConfig] = React.useState(DEFAULT_CONFIG);
 
   React.useEffect(() => { setError(null); }, [name]);
 
@@ -78,7 +79,7 @@ export const CreateProject = ({ onClose }) => {
   const steps = {
     name: <span className={tabClass.mod({ disabled: !!error })}>Project Name</span>,
     import: <span className={tabClass.mod({ disabled: uploadDisabled })}>Data Import</span>,
-    config: "Labeling Setup",
+    // config: "Labeling Setup",
   };
 
   // name intentionally skipped from deps:

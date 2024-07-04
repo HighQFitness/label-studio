@@ -136,6 +136,12 @@ const Model = types
       self.triggerSync('pause', { playing: false });
     },
 
+    //event to pass length to chart tag
+
+    triggerSyncLength() {
+      self.triggerSync('length', { length: self.length })
+    },
+
     ////// Incoming
 
     registerSyncHandlers() {
@@ -179,6 +185,7 @@ const Model = types
     return {
       setLength(length) {
         self.length = length;
+        self.triggerSyncLength();
       },
 
       setOnlyFrame(frame) {

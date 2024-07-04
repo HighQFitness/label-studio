@@ -53,7 +53,7 @@ export const Controls: FC<TimelineControlsProps> = memo(({
   duration,
   extraControls,
   fullscreen,
-  altHopSize,
+  altHopSize = 10,
   disableFrames,
   allowFullscreen,
   allowViewCollapse,
@@ -210,8 +210,8 @@ export const Controls: FC<TimelineControlsProps> = memo(({
                   </ControlButton>
                 )}
                 <ControlButton
-                  onClick={stepHandlerWrapper(onStepBackward)}
-                  hotkey={settings?.stepBackHotkey}
+                  onClick={altControlsMode? () => onRewind?.(altHopSize) : stepHandlerWrapper(onStepBackward)}
+                  hotkey={altControlsMode? settings?.hopBackward : settings?.stepBackHotkey}
                   disabled={startReached}
                 >
                   <IconChevronLeft/>
@@ -237,7 +237,12 @@ export const Controls: FC<TimelineControlsProps> = memo(({
               </>
             )}
           />
-          <ControlButton data-testid={`playback-button:${playing ? 'pause' : 'play'}`} onClick={handlePlay} hotkey={settings?.playpauseHotkey}>
+          <span
+            id={`${props.customIdPrefix ?? ''}-custom-id-for-stop-btn`}
+            onClick={() => onPositionChange?.(1)}
+            style={{ display: 'none' }}
+          />
+          <ControlButton data-testid={`${props.customIdPrefix ?? ''}-playback-button:${playing ? 'pause' : 'play'}`} onClick={handlePlay} hotkey={settings?.playpauseHotkey}>
             {playing ? <IconPause/> : <IconPlay/>}
           </ControlButton>
           <AltControls
@@ -245,8 +250,8 @@ export const Controls: FC<TimelineControlsProps> = memo(({
             main={(
               <>
                 <ControlButton
-                  onClick={stepHandlerWrapper(onStepForward)}
-                  hotkey={settings?.stepForwardHotkey}
+                  onClick={altControlsMode ? () => onForward?.(altHopSize) : stepHandlerWrapper(onStepForward)}
+                  hotkey={altControlsMode? settings?.hopForward : settings?.stepForwardHotkey}
                   disabled={endReached}
                 >
                   <IconChevronRight/>{}

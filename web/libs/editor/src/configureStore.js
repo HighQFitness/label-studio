@@ -29,11 +29,12 @@ export const configureStore = async (params, events) => {
   if (params.task?.id) {
     params.taskHistory = [{ taskId: params.task.id, annotationId: null }];
   }
-
   const store = AppStore.create(params, {
     ...env.configureApplication(params),
     events,
   });
+
+  store.updateTasksDataList(params.tasksDataList);
 
   store.initializeStore({
     ...(params.task ?? {}),

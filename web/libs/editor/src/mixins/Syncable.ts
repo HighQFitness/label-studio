@@ -135,8 +135,15 @@ const SyncableMixin = types
   .actions(self => ({
     afterCreate() {
       if (!self.sync) return;
-
-      self.syncManager = SyncManagerFactory.get(self.sync, self.name);
+      if (self.sync.trim().split(',')?.length) {
+        const syncSplit = self.sync.trim().split(',');
+        const sync1 = syncSplit[0];
+        const sync2 = syncSplit[1];
+        self.syncManager = SyncManagerFactory.get(sync1, self.name);
+        self.syncManager = SyncManagerFactory.get(sync2, self.name);
+      } else {
+        self.syncManager = SyncManagerFactory.get(self.sync, self.name);
+      }
       self.syncManager!.register(self as Instance<typeof SyncableMixin>);
       (self as Instance<typeof SyncableMixin>).registerSyncHandlers();
     },

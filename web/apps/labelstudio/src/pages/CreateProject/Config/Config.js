@@ -20,6 +20,7 @@ import { TemplatesList } from './TemplatesList';
 import './codemirror.css';
 import './config-hint';
 import tags from './schema.json';
+import { DEFAULT_CONFIG } from '../utils/configurattion-constant';
 
 const wizardClass = cn("wizard");
 const configClass = cn("configure");
@@ -478,7 +479,7 @@ const Configurator = ({ columns, config, project, template, setTemplate, onBrows
 };
 
 export const ConfigPage = ({
-  config: initialConfig = "",
+  config: initialConfig = DEFAULT_CONFIG,
   columns: externalColumns,
   project,
   onUpdate,
@@ -487,7 +488,7 @@ export const ConfigPage = ({
   disableSaveButton,
   show = true,
 }) => {
-  const [config, _setConfig] = React.useState("");
+  const [config, _setConfig] = React.useState(DEFAULT_CONFIG);
   const [mode, setMode] = React.useState("list"); // view | list
   const [selectedGroup, setSelectedGroup] = React.useState(null);
   const [selectedRecipe, setSelectedRecipe] = React.useState(null);

@@ -44,6 +44,27 @@ const TaskStore = types
         return null;
       }
     },
-  }));
+  })).actions(self => {
+    function updateData(newData){
+      self.data = newData;
+      return self;
+    }
+
+    function getVideoUrl() {
+      try{
+        const data = JSON.parse(self.data);
+        const { video } = data;
+        return video;
+      } catch(err) {
+        console.error('ERROR', err);
+        return null;
+      }
+    }
+
+    return {
+      updateData,
+      getVideoUrl
+    };
+  });
 
 export default TaskStore;

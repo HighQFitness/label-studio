@@ -15,3 +15,6 @@ export { ReactComponent as CommentRed } from "./comment_red.svg";
 export { ReactComponent as LsGrid } from "./grid.svg";
 export { ReactComponent as LsList } from "./list.svg";
 export { ReactComponent as LsRefresh2 } from "./refresh2.svg";
+
+export { ReactComponent as IconArrowLeft } from './arrow-left.svg';
+export { ReactComponent as IconArrowRight } from './arrow-right.svg';

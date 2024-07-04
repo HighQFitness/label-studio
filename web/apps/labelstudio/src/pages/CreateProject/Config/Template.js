@@ -1,8 +1,9 @@
 import { CONTROLS, OBJECTS } from "./tags";
 import { Palette } from "../../../utils/colors";
+import { DEFAULT_CONFIG } from "../utils/configurattion-constant";
 
-export const EMPTY_CONFIG = "<View></View>";
-export const DEFAULT_COLUMN = "$undefined$";
+export const EMPTY_CONFIG = DEFAULT_CONFIG;
+export const DEFAULT_COLUMN = "$video";
 export const isEmptyConfig = config => ["", EMPTY_CONFIG].includes(config.replace(/\s+/g, ''));
 
 export class Template {

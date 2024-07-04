@@ -69,7 +69,7 @@ COPY --chown=1001:0 label_studio/__init__.py ./label_studio/__init__.py
 # the system python. This includes label-studio itself. For caching purposes,
 # do this before copying the rest of the source code.
 RUN --mount=type=cache,target=$POETRY_CACHE_DIR \
-    poetry check --lock && poetry install
+    poetry lock --no-update && poetry check --lock && poetry install
 
 COPY --chown=1001:0 LICENSE LICENSE
 COPY --chown=1001:0 licenses licenses

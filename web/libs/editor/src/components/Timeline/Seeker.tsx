@@ -12,6 +12,7 @@ export interface SeekerProps {
   seekVisible: number;
   step: number;
   leftOffset?: number;
+  customIdPrefix?: string;
   minimap?: ReactElement<TimelineMinimapProps> | null;
   onIndicatorMove: (position: number) => void;
   onSeek: (position: number) => void;
@@ -118,6 +119,15 @@ export const Seeker: FC<SeekerProps> = ({
 
   return (
     <Block name="seeker" ref={rootRef} onMouseDown={onDrag}>
+      {/* <span
+            id={`${props.customIdPrefix ?? ''}-hidden-elem-to-set-position`}
+            onClick={(e, pos) => {
+              if (pos) {
+                onSeek?.(pos);
+              }
+            }}
+            style={{ display: 'none' }}
+      /> */}
       <Elem name="track"/>
       {showIndicator && (
         <Elem name="indicator" ref={viewRef} style={{ left: windowOffset, width }}/>

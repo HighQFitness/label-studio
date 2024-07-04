@@ -1,5 +1,5 @@
-import { observer } from 'mobx-react';
-import { FC, useEffect, useRef } from 'react';
+import { inject, observer } from 'mobx-react';
+import { FC, useEffect, useRef, useState } from 'react';
 import { Hotkey } from '../../../core/Hotkey';
 import { useWaveform } from '../../../lib/AudioUltra/react';
 import { Controls } from '../../../components/Timeline/Controls';
@@ -10,6 +10,9 @@ import { Block } from '../../../utils/bem';
 import { ErrorMessage } from '../../../components/ErrorMessage/ErrorMessage';
 
 import './view.styl';
+import { Waveform } from '../../../lib/AudioUltra';
+import { Visualizer } from '../../../lib/AudioUltra/Visual/Visualizer';
+import { onSnapshot } from 'mobx-state-tree';
 
 interface AudioUltraProps {
   item: any;
@@ -17,7 +20,7 @@ interface AudioUltraProps {
 
 const NORMALIZED_STEP = 0.1;
 
-const AudioUltraView: FC<AudioUltraProps> = ({ item }) => {
+const AudioUltraView: FC<AudioUltraProps> = inject(['store'])(observer(({ item, store }) => {
   const rootRef = useRef<HTMLElement | null>();
 
   const { waveform, ...controls } = useWaveform(rootRef, {
@@ -60,10 +63,90 @@ const AudioUltraView: FC<AudioUltraProps> = ({ item }) => {
     autoPlayNewSegments: true,
   });
 
+  const seekVal = () =>{
+    let val = -1;
+    return (newVal:number|undefined) => {
+      if(newVal)
+        val = newVal;
+      return val;
+    };
+  };
+  const seekStart = seekVal();
+
+  const [isRegionRecording, setIsRegionRecording] = useState(false);
+  const [regionStart, setRegionStart] = useState(-1);
+
+  const [chartRegionCb, setChartRegionCb] = useState(false);
+  const [chartRegionUpdateCb, setChartRegionUpdateCb] = useState(false);
+
+  onSnapshot(store.shouldDrawChartRegion, snap => {
+    setChartRegionCb(snap.flag);
+  });
+
+  onSnapshot(store.shouldEditChartRegion, snap => {
+    setChartRegionUpdateCb(snap.flag);
+  });
+
+  const addRegionFromChart = () => {
+      const newRegionToDraw = store.chartRegionToDraw;
+      if (
+        (newRegionToDraw.start > 0 && newRegionToDraw.end > 0) &&
+        (newRegionToDraw.start < controls.duration && newRegionToDraw.end <= controls.duration) &&
+        (newRegionToDraw.start < newRegionToDraw.end)
+      ) {
+        if (newRegionToDraw.end > controls.duration) newRegionToDraw.end = controls.duration;
+        const labels = item.activeState?.selectedValues();
+        const newRegion = new Region(
+          {
+            start:newRegionToDraw.start as number,
+            end:newRegionToDraw.end as number,
+            labels:labels,
+            color: waveform.current?.regions.drawingColor?.toString(),
+          },
+          waveform.current as Waveform,
+          waveform.current?.visualizer as Visualizer,
+          waveform.current?.regions as Regions
+          );
+          waveform.current?.regions.addRegionKey(newRegion);
+          // store.setChartRegionDrawFlag();
+      }
+      store.resetChartRegionToDraw();
+  };
+
+  const updateRegionFromChart = () => {
+    const regionToUpdate = store.chartRegionToEdit;
+    if (
+      (regionToUpdate.start > 0 && regionToUpdate.end > 0) &&
+      (regionToUpdate.start < controls.duration && regionToUpdate.end <= controls.duration)
+    ) {
+      const region = waveform?.current?.regions?.findRegion(regionToUpdate.id);
+    if (region) {
+        region.start = regionToUpdate.start;
+        region.end = regionToUpdate.end;
+        region.selected = true;
+        item.updateRegion(region);
+      }
+      store.resetChartRegionToEdit();
+    }
+  };
+
+  useEffect(() => {
+    if (chartRegionCb) {
+      addRegionFromChart();
+    }
+  }, [chartRegionCb]);
+
+  useEffect(() => {
+    if (chartRegionUpdateCb) {
+      updateRegionFromChart();
+    }
+  }, [chartRegionUpdateCb]);
+
   useEffect(() => {
     const hotkeys = Hotkey('Audio', 'Audio Segmentation');
 
     waveform.current?.load();
+
 
     const updateBeforeRegionDraw = (regions: Regions) => {
       const regionColor = item.getRegionColor();
@@ -135,16 +218,59 @@ const AudioUltraView: FC<AudioUltraProps> = ({ item }) => {
       waveform.current?.regions.clearSegments();
     });
 
+    hotkeys.addNamed('region:start-stop-htk', () => {
+      const existingSeek = seekStart(undefined);
+      const seekTime = Number(waveform?.current?.getCurrentTime()) ?? 0;
+        if(existingSeek == -1){
+        seekStart(seekTime);
+        setRegionStart(seekTime);
+      } else {
+        if(seekTime == existingSeek || seekTime < existingSeek) {
+          // Reset seek variable and return
+          seekStart(-1);
+          setRegionStart(-1);
+          setIsRegionRecording(seekStart(undefined) >-1)
+          return;
+        }
+        // save current seek value as region end
+        //Create new region
+        const seekTimeEnd = Number(waveform?.current?.getCurrentTime()) ?? 0;
+        const labels = item.activeState?.selectedValues();
+        // waveform.current?.regions?.addRegionKey(
+        //    existingSeek,
+        //    seekTimeEnd,
+        //   labels
+        // );
+        const newRegion = new Region(
+          {
+            start:existingSeek,
+            end:seekTimeEnd,
+            labels:labels,
+            color: waveform.current?.regions.drawingColor?.toString(),
+          },
+          waveform.current as Waveform,
+          waveform.current?.visualizer as Visualizer,
+          waveform.current?.regions as Regions
+          );
+          waveform.current?.regions.addRegionKey(newRegion);
+        // Reset seek value
+        seekStart(-1);
+        setRegionStart(-1);
+      }
+      setIsRegionRecording(seekStart(undefined) >-1)
+    });
+
     return () => {
       hotkeys.unbindAll();
     };
   }, []);
 
   return (
-    <Block name="audio-tag">
+    <Block name="audio-tag" style={{ display: store.shouldShowAudioWave.flag ? 'block' : 'none' }}>
       {item.errors?.map((error: any, i: any) => (
         <ErrorMessage key={`err-${i}`} error={error} />
       ))}
+      {isRegionRecording && <div className={'lsf-button-custom'}>Recording Region from {regionStart.toFixed(2)} seconds</div>}
       <div ref={el => (rootRef.current = el)}></div>
       <Controls
         position={controls.currentTime}
@@ -187,6 +313,6 @@ const AudioUltraView: FC<AudioUltraProps> = ({ item }) => {
       />
     </Block>
   );
-};
+}));
 
 export const AudioUltra = observer(AudioUltraView);

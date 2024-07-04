@@ -4,7 +4,14 @@ type LSParams = Record<string, any>;
 
 class LSParamsBuilder {
   params: LSParams = {
-    config: '<View></View>',
+    config: `<View>
+		<Header value="Video timeline segmentation via Audio sync trick"/>
+		<Video name="video" value="$video" sync="audio"></Video>
+		<Labels name="tricks" toName="audio" choice="multiple">
+			<Label value=""/>
+		</Labels>
+		<Audio name="audio" value="$video" sync="video" zoom="true" speed="true" volume="true"/>
+	</View>`,
     interfaces: [
       'panel',
       'update',

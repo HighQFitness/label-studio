@@ -1,5 +1,5 @@
 import { configure } from 'mobx';
-import { destroy } from 'mobx-state-tree';
+import { applySnapshot, destroy, onSnapshot } from 'mobx-state-tree';
 import { render, unmountComponentAtNode } from 'react-dom';
 import { toCamelCase } from 'strman';
 
@@ -37,6 +37,8 @@ type LSFOptions = Record<string, any> & {
   user: LSFUser,
   users: LSFUser[],
   task: LSFTask,
+  prevTask: String,
+  nextTask: String,
 }
 
 export class LabelStudio {
@@ -103,7 +105,6 @@ export class LabelStudio {
   async createApp() {
     const { store } = await configureStore(this.options, this.events);
     const rootElement = this.getRootElement(this.root);
-
     this.store = store;
     window.Htx = this.store;
 

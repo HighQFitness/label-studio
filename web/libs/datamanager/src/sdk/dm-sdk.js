@@ -417,6 +417,7 @@ export class DataManager {
       preload: this.preload,
       // annotation: this.store.annotationStore.selected,
       isLabelStream: this.mode === 'labelstream',
+      taskList: this.store.taskStore.list,
     });
   }
 

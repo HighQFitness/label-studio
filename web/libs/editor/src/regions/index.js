@@ -12,6 +12,8 @@ import { EllipseRegionModel, HtxEllipse } from './EllipseRegion';
 import { HtxTextAreaRegion, TextAreaRegionModel } from './TextAreaRegion';
 import { RichTextRegionModel } from './RichTextRegion';
 import { VideoRectangleRegionModel } from './VideoRectangleRegion';
+import { ChartRegionModel } from './ChartRegion';
+// import { ChartRegionModel } from './ChartRegionTs'
 
 const AllRegionsType = types.union(
   AudioRegionModel,
@@ -26,6 +28,8 @@ const AllRegionsType = types.union(
   TimeSeriesRegionModel,
   ParagraphsRegionModel,
   VideoRectangleRegionModel,
+  ChartRegionModel,
+  // ChartRegion
 );
 
 export {
@@ -48,5 +52,7 @@ export {
   PolygonRegionModel,
   RectRegionModel,
   TextAreaRegionModel,
-  VideoRectangleRegionModel
+  VideoRectangleRegionModel,
+  ChartRegionModel,
+  // ChartRegion
 };

@@ -5,10 +5,9 @@
     "allowJs": true,
     "checkJs": false,
     "jsx": "react",
-    "strict": false,
+    "strict": true,
     "rootDirs": ["./src"],
-    "typeRoots": [
-      "src/types", "node_modules/@types"],
+    "typeRoots": ["./types", "./node_modules/@types"],
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,

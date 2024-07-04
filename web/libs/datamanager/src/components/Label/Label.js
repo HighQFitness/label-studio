@@ -1,7 +1,7 @@
 import { inject } from "mobx-react";
 import { observer } from "mobx-react-lite";
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
-import { FaCaretDown, FaChevronLeft, FaColumns } from "react-icons/fa";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FaArrowDown, FaArrowUp, FaCaretDown, FaChevronLeft, FaColumns } from "react-icons/fa";
 import { Block, Elem } from "../../utils/bem";
 import { FF_DEV_1170, isFF } from "../../utils/feature-flags";
 import { Button } from "../Common/Button/Button";
@@ -11,6 +11,9 @@ import { Resizer } from "../Common/Resizer/Resizer";
 import { Space } from "../Common/Space/Space";
 import { DataView } from "../MainView";
 import "./Label.styl";
+import { Tooltip } from "../Common/Tooltip/Tooltip";
+import { IconArrowLeft, IconArrowRight } from "../../assets/icons";
+import AthleteWODInfo from "../../../../editor/src/components/AthleteWODInfo/AthleteWODInfo";
 
 const LabelingHeader = ({ SDK, onClick, isExplorerMode }) => {
   return (
@@ -54,10 +57,20 @@ export const Labeling = injector(observer(({
   store,
   loading,
 }) => {
+  const shouldShowTaskTable = true; //window.localStorage.getItem('showTaskTable')?.toLocaleLowerCase() === 'true';
+
   const lsfRef = useRef();
   const SDK = store?.SDK;
   const view = store?.currentView;
   const { isExplorerMode } = store;
+
+  const [collapseTable, setCollapseTable] = useState(shouldShowTaskTable);
+
+  const toggleCollapseTaskTable = () => {
+    const flag = !collapseTable;
+    window.localStorage.setItem('showTaskTable', `${flag}`);
+    setCollapseTable(flag);
+  };
 
   const isLabelStream = useMemo(() => {
     return SDK.mode === 'labelstream';
@@ -108,24 +121,82 @@ export const Labeling = injector(observer(({
         />
       )}
 
-      <Elem name="content">
-        {isExplorerMode && (
-          <Elem name="table">
-            <Elem
-              tag={Resizer}
-              name="dataview"
-              minWidth={200}
-              showResizerLine={false}
-              type={'quickview'}
-              maxWidth={window.innerWidth * 0.35}
-              initialWidth={view.labelingTableWidth} // hardcoded as in main-menu-trigger
-              onResizeFinished={onResize}
-              style={{ display: "flex", flex: 1, width: '100%' }}
-            >
-              <DataView />
+      <Elem name="content" style={{ position: 'relative' }}>
+        {/* <div
+          style={{
+            position: 'absolute',
+            top: -3,
+            left: 2,
+            width: 20,
+            height: 20,
+            border: `1px solid black`,
+            borderRadius: '50%',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            cursor: 'pointer',
+            backgroundColor: 'white',
+            zIndex: 9999
+          }}
+        >
+          <Tooltip title={collapseTable ? 'Show Task Table' : 'Hide Task Table'}>
+            {
+              collapseTable ?
+              <IconArrowRight onClick={toggleCollapseTaskTable}/> :
+              <IconArrowLeft onClick={toggleCollapseTaskTable}/>
+            }
+          </Tooltip>
+        </div> */}
+        <div style={{ height: '100%', backgroundColor: 'white'}}>
+          {(isExplorerMode && !collapseTable) && (
+            <Elem name="table" style={{ height: '60%', maxHeight: 600 }} >
+              <Elem
+                tag={Resizer}
+                name="dataview"
+                minWidth={200}
+                showResizerLine={false}
+                type={'quickview'}
+                maxWidth={window.innerWidth * 0.35}
+                initialWidth={view.labelingTableWidth} // hardcoded as in main-menu-trigger
+                onResizeFinished={onResize}
+                style={{ display: "flex", flex: 1, width: '100%'}}
+              >
+                <DataView />
+              </Elem>
             </Elem>
-          </Elem>
-        )}
+          )}
+          <div style={{ margin: '1rem auto', position: 'relative' }}>
+            <div
+              style={{
+                position: 'absolute',
+                top: -8,
+                left: 3,
+                width: 20,
+                height: 20,
+                border: `1px solid black`,
+                borderRadius: '50%',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                cursor: 'pointer',
+                backgroundColor: 'white',
+                zIndex: 9999
+              }}
+            >
+              <Tooltip title={collapseTable ? 'Show Task Table' : 'Hide Task Table'}>
+                {
+                  collapseTable ?
+                  <FaArrowDown onClick={toggleCollapseTaskTable}/> :
+                  <FaArrowUp onClick={toggleCollapseTaskTable}/>
+                }
+              </Tooltip>
+            </div>
+            <AthleteWODInfo
+              athleteName={'John Doe'}
+              wod={'5 rounds for time\n 3 bar muscle up\n10 deadlifts (135/95 lbs)'}
+            />
+          </div>
+        </div>
 
         <Elem name="lsf-wrapper" mod={{ mode: isExplorerMode ? "explorer" : "labeling" }}>
           {loading && <Elem name="waiting" mod={{ animated: true }}/>}

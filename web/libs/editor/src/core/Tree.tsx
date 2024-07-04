@@ -94,7 +94,6 @@ function tagIntoObject(
           return tagIntoObject(clonedNode, taskData, newReplaces);
         }),
       };
-
       views.push(view);
     }
 
@@ -247,6 +246,8 @@ function renderItem(ref: IAnyStateTreeNode, annotation: IAnnotation, includeKey 
   if (!View) {
     throw new Error(`No view for model: ${typeName}`);
   }
+  if(typeName === 'LabelModel' && !el?.value) return null;
+  
   const key = (identifierAttribute && el[identifierAttribute]) || guidGenerator();
 
   return <View key={includeKey ? key : undefined} item={el} />;

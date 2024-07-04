@@ -47,6 +47,7 @@ function configureApplication(params) {
   const ouCB = params.updateAnnotation || params.onUpdateAnnotation;
   const odCB = params.deleteAnnotation || params.onDeleteAnnotation;
 
+
   const options = {
     // communication with the server
     // fetch: params.fetch || Requests.fetcher,
@@ -58,7 +59,10 @@ function configureApplication(params) {
     settings: params.settings || {},
     messages: { ...Messages, ...params.messages },
 
+
     // callbacks and event handlers
+    onUpdateOffset: params.onUpdateOffset ? ouCB : External.onUpdateOffset,
+    onUpdateProject: params.onUpdateProject ? ouCB : External.onUpdateProject,
     onSubmitAnnotation: params.onSubmitAnnotation ? osCB : External.onSubmitAnnotation,
     onUpdateAnnotation: params.onUpdateAnnotation ? ouCB : External.onUpdateAnnotation,
     onDeleteAnnotation: params.onDeleteAnnotation ? odCB : External.onDeleteAnnotation,

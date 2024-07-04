@@ -311,6 +311,7 @@ const ToggleRegionsVisibilityButton = observer<FC<ToggleRegionsVisibilityButton>
     e.preventDefault();
     e.stopPropagation();
     regions.toggleVisibility();
+    regions.annotation?.store?.annotationRegionsStateChanged?.();
   }, [regions]);
 
   const isDisabled = !regions?.regions?.length;

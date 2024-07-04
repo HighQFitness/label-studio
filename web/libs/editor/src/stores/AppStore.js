@@ -27,8 +27,29 @@ import { UserLabels } from './UserLabels';
 import { FF_DEV_1536, FF_LSDV_4620_3_ML, FF_LSDV_4998, FF_SIMPLE_INIT, isFF } from '../utils/feature-flags';
 import { CommentStore } from './Comment/CommentStore';
 import { destroy as destroySharedStore } from '../mixins/SharedChoiceStore/mixin';
+import { BASE_URL_VIDEO, FALLBACK_STORAGE_FILE_NAME, TEMP_WORKOUT_ID, VERSION } from './../utils/constants';
+// import { ChartRegionModel } from '../regions';
 
 const hotkeys = Hotkey('AppStore', 'Global Hotkeys');
+
+const tagsObj = types.model({
+  id: types.integer,
+  value: types.optional(types.string, '')
+});
+
+const videoOptObj = types.model({
+  video: types.string,
+  title: types.optional(types.string, ''),
+});
+
+const toggleBoolObj = types.model({
+  flag: types.optional(types.boolean, false),
+});
+
+const userLabelObj = types.model({
+  user: types.optional(types.string, ''),
+  labels: types.optional(types.array(types.string), []),
+})
 
 export default types
   .model('AppStore', {
@@ -38,11 +59,39 @@ export default types
     config: types.string,
 
     /**
+     * Custom array
+     */
+    labelsData: types.array(tagsObj),
+    labelOptions: types.array(tagsObj),
+    labelOptLoading: types.optional(toggleBoolObj, getSnapshot(toggleBoolObj.create())),
+    labelOptErrMsg: types.maybeNull(types.string),
+    showLabelsModal: types.maybeNull(toggleBoolObj),
+    /**
      * Task with data, id and project
      */
     task: types.maybeNull(Task),
 
+    taskData: types.maybeNull(types.string, ''),
+
+    taskDataFlag: types.maybeNull(toggleBoolObj),
+    
+    prevTask: types.maybeNull(types.string),
+    nextTask: types.maybeNull(types.string),
+    tasksDataList: types.array(types.maybe(types.string)),
+    tasksDataListOptions: types.array(types.maybe(videoOptObj)),
+    tasksDataListOptionsLoading: types.maybeNull(toggleBoolObj),
+    tasksDataListOptionsErrMsg: types.maybeNull(types.string),
+    showVideoOptions: types.maybeNull(toggleBoolObj),
+
+    shouldShowAudioWave: types.maybeNull(toggleBoolObj),
+
+    workoutId: types.optional(types.string, ''),
+    storage_filename: types.optional(types.string, ''),
+
     project: types.maybeNull(Project),
+
+
+    userLabel: types.maybeNull(types.array(userLabelObj), []),
 
     /**
      * History of task {taskId, annotationId}:
@@ -156,6 +205,26 @@ export default types
     queueTotal: types.optional(types.number, 0),
 
     queuePosition: types.optional(types.number, 0),
+    /**Start Seek position used to create regions on audio with hotkey */
+    htkRegionStart: types.optional(types.number, 0),
+
+    /*** Chart Regions */
+    // chartRegions: types.maybe(types.array(ChartRegionModel), []),
+
+    shouldDrawChartRegion: types.maybeNull(toggleBoolObj),
+
+    chartRegionToDraw: types.maybe(types.model({ start: types.number, end: types.number }), {}),
+
+    shouldEditChartRegion: types.maybeNull(toggleBoolObj),
+    annotationRegionsStateChange: types.maybeNull(toggleBoolObj),
+    videoRefChange: types.maybeNull(toggleBoolObj),
+
+    chartRegionToEdit: types.maybe(types.model({ start: types.number, end: types.number, id: types.string }), {}),
+
+    offset: types.optional(types.number, 0),
+    currentAnnotationOffset: types.optional(types.number, 0),
+    taskMeta: types.optional(types.string, JSON.stringify({})),
+    metaUpdated: types.optional(types.model({ updatedAt: types.string }), { updatedAt: 'a' }),
   })
   .preProcessSnapshot((sn) => {
     // This should only be handled if the sn.user value is an object, and converted to a reference id for other
@@ -231,8 +300,191 @@ export default types
       return self.forceAutoAcceptSuggestions || self._autoAcceptSuggestions;
     },
   }))
+  .actions(self => ({
+    fetchTimeSeriesData: flow(function* fetchTimeSeriesData() {
+      const selfData = JSON.parse(self.taskData);
+        const initialData = {
+          ...selfData,
+          ts_foot: {
+            time: [0],
+            gyro_x: [0],
+            gyro_y: [0],
+            gyro_z: [0],
+            accel_x: [0],
+            accel_y: [0],
+            accel_z: [0],
+          },
+          ts_wrist: {
+            time: [0],
+            gyro_x: [0],
+            gyro_y: [0],
+            gyro_z: [0],
+            accel_x: [0],
+            accel_y: [0],
+            accel_z: [0],
+          }
+        };
+      try {
+        const response = yield fetch(BASE_URL_VIDEO+'get_workout_data/'+self.workoutId+'/reformatted');
+        const data = yield response.json();
+        const data_foot = { ...data.data.foot_right }
+        initialData.ts_foot = data_foot;
+      } catch (error) {
+        console.error('Error fetching time series data:', error);
+      }
+      self.taskData = JSON.stringify(initialData);
+      self.annotationStore.updateTimeSeriesData(initialData);
+      self.taskDataFlag.flag = !self.taskDataFlag.flag;
+      self.task.updateData(JSON.stringify(initialData));
+      return self;
+    }),
+  }))
   .actions(self => {
     let appControls;
+
+    function changeHtkRegionStart(val){
+      self.htkRegionStart = val;
+    }
+
+    function updateTasksDataList(srcData){
+      self.tasksDataList = [...srcData];
+      return self;
+    }
+
+    function setWorkoutId(id){
+      self.workoutId = id;
+    }
+
+    function setShowLabelsModal(value = false) {
+      self.showLabelsModal.flag = value;
+    }
+
+    const fetchLabelOptions = flow(function* (){
+      self.labelOptions = [];
+      self.labelOptLoading.flag = true;
+      self.labelOptErrMsg = "";
+      try {
+        // ... yield can be used in async/await style
+        // const resp = yield fetch('https://daniyal-mobile.groveops.net/labelstudio_svc/exercise'+`/${self.project.id}`);
+        const resp = yield fetch('https://mobile.highqfit.com/labelstudio_svc/exercise');
+        const { ok, status } = resp;
+        if (ok && (status >=200 && status <=400)) {
+          const data = yield resp.json();
+          self.labelOptions = data.body;
+        } else {
+          const jsonRes = yield resp.json();
+          self.labelOptErrMsg = jsonRes?.message ?? "Unable to fetch video options";
+        }
+    } catch (error) {
+        // ... including try/catch error handling
+        console.error("Failed to fetch projects", error)
+        self.labelOptErrMsg = "Unable to fetch Labels"
+    }
+    self.labelOptLoading.flag = false;
+    return self.labelOptions.length;
+    })
+
+    function setShouldShowAudioWave(value = true) {
+      self.shouldShowAudioWave.flag = value;
+    }
+
+    function setShowVideoOptions(value = false){
+      self.showVideoOptions.flag = value;
+      window.localStorage.setItem('showThumbnails', `${value}`);
+    }
+
+    const fetchVideoOptions = flow(function* (workoutId){
+      self.tasksDataListOptions = [];
+      self.tasksDataListOptionsLoading.flag = true;
+      self.tasksDataListOptionsErrMsg = "";
+      let _videoName = '';
+      try {
+        if (self.taskMeta) {
+          const meta = JSON.parse(self.taskMeta);
+          _videoName = meta.video_name;
+        }
+      } catch(err) {
+        console.error("ERROR while getting video name from meta", err);
+      }
+      const videoName = self.storage_filename ? self.storage_filename.split('/')[2] : _videoName;
+      try {
+        // ... yield can be used in async/await style
+        const resp = yield fetch(BASE_URL_VIDEO + 'get_workout_videos_urls/' + workoutId + `${videoName ? '?exclude_videos=' + videoName: ''}`);
+        const { ok, status } = resp;
+        if (ok && (status >=200 && status <=400)) {
+          const data = yield resp.json();
+          data?.urls ? self.tasksDataListOptions = [...data.urls] : self.tasksDataListOptions = [];
+        } else {
+          const jsonRes = yield resp.json();
+          self.tasksDataListOptionsErrMsg = jsonRes?.message ?? "Unable to fetch video options";
+        }
+        // self.tasksDataListOptions.unshift({ video : JSON.parse(self.task.data).video, title: 'default'});
+    } catch (error) {
+        // ... including try/catch error handling
+        console.error("Failed to fetch video options", error);
+        self.tasksDataListOptionsErrMsg = error.message ?? "Unable to fetch video options";
+    }
+    self.tasksDataListOptionsLoading.flag = false;
+    // console.log(self.tasksDataListOptionsErrMsg);
+    return self.tasksDataListOptions.length;
+    })
+
+    function unshiftVideoOptions(firstOption){
+      self.tasksDataListOptions.unshift(firstOption);
+      return self.tasksDataListOptions.length;
+    };
+
+    // function setChartRegions(chartRegions) {
+    //   console.log('new chart regions received', chartRegions);
+    //   self.chartRegions = chartRegions;
+    // };
+
+    function setChartRegionDrawFlag(flag = false) {
+      self.shouldDrawChartRegion.flag = flag;
+    }
+
+    function setChartRegionToDraw(newChartRegion) {
+      self.chartRegionToDraw = newChartRegion;
+    }
+
+    function resetChartRegionToDraw() {
+      self.chartRegionToDraw = { start: -1, end: -1 };
+      self.setChartRegionDrawFlag();
+    }
+
+    function setChartRegionEditFlag(flag = false) {
+      self.shouldEditChartRegion.flag = flag;
+    }
+
+    function annotationRegionsStateChanged() {
+      self.annotationRegionsStateChange.flag = !self.annotationRegionsStateChange.flag;
+    }
+
+    function videoRefChanged() {
+      self.videoRefChange.flag = !self.videoRefChange.flag;
+    }
+
+    function setChartRegionToEdit(newChartRegion) {
+      self.chartRegionToEdit = newChartRegion;
+    }
+
+    function resetChartRegionToEdit() {
+      self.chartRegionToEdit = { start: -1, end: -1, id: '' };
+      self.setChartRegionEditFlag();
+    }
+
+    function addLabel(labels = []){
+      if(labels.length > 0){
+        self.labelsData = labels;
+      }
+      else {
+        self.labelsData = [];
+      }
+    }
+
+    function setUserLabel(userLabels) {
+      self.userLabel = userLabels;
+    };
 
     function setAppControls(controls) {
       appControls = controls;
@@ -315,6 +567,21 @@ export default types
       self.attachHotkeys();
 
       getEnv(self).events.invoke('labelStudioLoad', self);
+      self.tasksDataListOptionsLoading = toggleBoolObj.create();
+      self.annotationRegionsStateChange = toggleBoolObj.create();
+      self.videoRefChange = toggleBoolObj.create();
+      self.metaUpdated = { updatedAt: 'aa' };
+      if (!self.showLabelsModal) self.showLabelsModal = toggleBoolObj.create();
+      if (!self.showVideoOptions) self.showVideoOptions = toggleBoolObj.create();
+      if (!self.shouldShowAudioWave) self.shouldShowAudioWave = toggleBoolObj.create();
+      if (!self.taskDataFlag) self.taskDataFlag = toggleBoolObj.create();
+      if (!self.shouldDrawChartRegion) self.shouldDrawChartRegion = toggleBoolObj.create();
+      if (!self.shouldEditChartRegion) self.shouldEditChartRegion = toggleBoolObj.create();
+      self.shouldShowAudioWave.flag = true;
+      const shouldShow = window.localStorage.getItem('showThumbnails')?.toLocaleLowerCase() === 'true';
+      if (self.showVideoOptions) self.showVideoOptions.flag = shouldShow;
+      console.info('LSF VERSION:', VERSION);
+      if (!self.workoutId) self.workoutId = TEMP_WORKOUT_ID;
     }
 
     function attachHotkeys() {
@@ -494,6 +761,71 @@ export default types
 
       self.config = config;
       cs.initRoot(self.config);
+    }
+
+    function reAssignConfig(config){
+      destroy(self.annotationStore.root);
+      const cs = self.annotationStore;
+      
+      self.config = config;
+      cs.initRoot(self.config)
+    }
+
+    async function reAssignConfigLbl(config){
+      // destroy(self.annotationStore.root);
+      const cs = self.annotationStore;
+      
+      // self.config = config;
+      cs.updateLabels(config);
+      // self.attachHotkeys();
+    }
+
+    async function saveNewConfig(rootConfig){
+      if(rootConfig && rootConfig.trim() !== ""){
+        return await getEnv(self).events.invoke('updateProject',rootConfig);
+        
+      }
+    }
+
+    async function saveOffset(newOffset) {
+      if (!isNaN(Number(newOffset))) {
+        // self.offset = newOffset;
+        self.currentAnnotationOffset = newOffset;
+        const selectedAnn = (self.annotationStore.selected.pk && !isNaN(Number(self.annotationStore.selected.pk))) ? Number(self.annotationStore.selected.pk) : null;
+        // return await getEnv(self).events.invoke('updateOffset', newOffset, selectedAnn);
+        return self.currentAnnotationOffset;
+      }
+    }
+
+    function getCurrentAnnotationOffset() {
+      return self.currentAnnotationOffset;
+    }
+
+    async function saveOffsetOnAnnotationSubmit(pk = -1, offsetVal) {
+      const selectedAnn = (self.annotationStore.selected.pk && !isNaN(Number(self.annotationStore.selected.pk))) ? Number(self.annotationStore.selected.pk) : null;
+      const ann_id = (pk && pk > -1) ? pk : selectedAnn;
+      const offset = (offsetVal !== null && offsetVal !== undefined) ? offsetVal: self.currentAnnotationOffset;
+      return await getEnv(self).events.invoke('updateOffset', offset, ann_id);
+    }
+
+    function setTaskMeta(taskMeta) {
+      if (typeof taskMeta !== 'string') {
+        try{
+          self.taskMeta = JSON.stringify(taskMeta);
+          self.annotationStore.updateTaskTitle?.();
+        } catch (err) {
+          console.error('ERROR converting taskMeta to JSON string');
+          console.error(err);
+          return;
+        }
+      } else {
+        self.taskMeta = taskMeta;
+        self.annotationStore.updateTaskTitle?.();
+      }
+      if (Object.keys(JSON.parse(self.taskMeta)).length && JSON.parse(self.taskMeta).workout_id) {
+        self.workoutId = JSON.parse(self.taskMeta).workout_id;
+      }
+      self.metaUpdated = { updatedAt: `${Date.now()}` };
     }
 
     /* eslint-disable no-unused-vars */
@@ -855,7 +1187,46 @@ export default types
       self.setUsers(uniqBy([...getSnapshot(self.users), ...users], 'id'));
     }
 
+    function updateTaskData(newData) {
+      // const res = self.task.updateData(JSON.stringify({ video: newData}));
+      // reAssignConfig(self.config);
+      self.annotationStore.updateVideoSrc(newData);
+      
+    }
+
     return {
+      setWorkoutId,
+      setShowLabelsModal,
+      fetchLabelOptions,
+      setShowVideoOptions,
+      fetchVideoOptions,
+      addLabel,
+      setUserLabel,
+      changeHtkRegionStart,
+      saveNewConfig,
+      updateTaskData,
+      updateTasksDataList,
+      unshiftVideoOptions,
+      setShouldShowAudioWave,
+
+      saveOffset,
+      getCurrentAnnotationOffset,
+      saveOffsetOnAnnotationSubmit,
+
+      setTaskMeta,
+
+      // setChartRegions,
+      setChartRegionDrawFlag,
+      setChartRegionToDraw,
+      resetChartRegionToDraw,
+      setChartRegionEditFlag,
+      setChartRegionToEdit,
+      resetChartRegionToEdit,
+
+      annotationRegionsStateChanged,
+
+      videoRefChanged,
+
       setFlags,
       addInterface,
       hasInterface,
@@ -864,6 +1235,8 @@ export default types
       afterCreate,
       assignTask,
       assignConfig,
+      reAssignConfig,
+      reAssignConfigLbl,
       resetState,
       resetAnnotationStore,
       initializeStore,

@@ -512,6 +512,7 @@ const RegionControls: FC<RegionControlsProps> = observer(({
     } else if (type?.includes('tool')) {
       regionStore.setHiddenByTool(!hidden, entity);
     }
+    item.annotationStore?.regionsStateChange?.();
   }, [item, item?.toggleHidden, hidden]);
 
   const onToggleCollapsed = useCallback((e: MouseEvent) => {
@@ -520,6 +521,7 @@ const RegionControls: FC<RegionControlsProps> = observer(({
 
   const onToggleLocked = useCallback(() => {
     item.setLocked((locked: boolean) => !locked);
+    item.annotationStore?.regionsStateChange?.();
   }, []);
 
   return (

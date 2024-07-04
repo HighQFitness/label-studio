@@ -1,4 +1,4 @@
-import { destroy, getEnv, getParent, getRoot, types } from 'mobx-state-tree';
+import { destroy, detach, getEnv, getParent, getRoot, types, applySnapshot, getSnapshot } from 'mobx-state-tree';
 
 import { errorBuilder } from '../../core/DataValidator/ConfigValidator';
 import { DataValidator, ValidationError, VALIDATORS } from '../../core/DataValidator';
@@ -277,6 +277,246 @@ const AnnotationStoreModel = types
       return self.root;
     }
 
+    function updateRoot(config){
+      if (self.root) return;
+      // convert config to mst model
+      let rootModel;
+
+      try {
+        rootModel = Tree.treeToModel(config, self.store);
+      } catch (e) {
+        console.error(e);
+        return showError(e);
+      }
+      const modelClass = Registry.getModelByTag(rootModel.type);
+      // hacky way to get all the available object tag names
+      const objectTypes = Registry.objectTypes().map(type => type.name.replace('Model', '').toLowerCase());
+      const objects = [];
+
+      self.validate(VALIDATORS.CONFIG, rootModel);
+
+      try {
+        self.root = modelClass.create(rootModel);
+      } catch (e) {
+        console.error(e);
+        return showError(e);
+      }
+
+      if (isFF(FF_DEV_3391)) {
+        // initialize toName bindings [DOCS] name & toName are used to
+        // connect different components to each other
+        const { names, toNames } = Tree.extractNames(self.root);
+
+        names.forEach(tag => self.names.put(tag));
+        toNames.forEach((tags, name) => self.toNames.set(name, tags));
+
+        Tree.traverseTree(self.root, node => {
+          if (self.store.task && node.updateValue) node.updateValue(self.store);
+        });
+
+        self.initialized = true;
+
+        return self.root;
+      }
+
+      // initialize toName bindings [DOCS] name & toName are used to
+      // connect different components to each other
+      Tree.traverseTree(self.root, node => {
+        if (node?.name) {
+          self.addName(node);
+          if (objectTypes.includes(node.type)) objects.push(node.name);
+        }
+
+        const isControlTag = node.name && !objectTypes.includes(node.type);
+
+        // auto-infer missed toName if there is only one object tag in the config
+        if (isControlTag && !node.toname && objects.length === 1) {
+          node.toname = objects[0];
+        }
+
+        if (node && node.toname) {
+          self.upsertToName(node);
+        }
+
+        if (self.store.task && node.updateValue) node.updateValue(self.store);
+      });
+
+      self.initialized = true;
+
+      return self.root;
+    }
+
+    function updateLabels(labelConfig){
+      // convert config to mst model
+      let rootModel;
+      try {
+        rootModel = Tree.treeToModel(labelConfig, self.store);
+      } catch (e) {
+        console.error(e);
+        return showError(e);
+      }
+      const modelClass = Registry.getModelByTag(rootModel.type);
+      // hacky way to get all the available object tag names
+      const objectTypes = Registry.objectTypes().map(type => type.name.replace('Model', '').toLowerCase());
+      const objects = [];
+      rootModel.children = rootModel.children?.map(child => ({ ...child, parent: rootModel.id}))
+      try {
+        self.root.children[2] = getSnapshot(modelClass.create(rootModel));
+      } catch (e) {
+        console.error(e);
+        err = showError(e);
+        return err;
+      }
+      if (isFF(FF_DEV_3391)) {
+        // initialize toName bindings [DOCS] name & toName are used to
+        // connect different components to each other
+        const { names, toNames } = Tree.extractNames(self.root);
+        names.forEach(tag => self.names.put(tag));
+        toNames.forEach((tags, name) => self.toNames.set(name, tags));
+        Tree.traverseTree(self.root, node => {
+          if (self.store.task && node.updateValue) node.updateValue(self.store);
+        });
+        self.initialized = true;
+        return self.root;
+      }
+      // initialize toName bindings [DOCS] name & toName are used to
+      // connect different components to each other
+      Tree.traverseTree(self.root, node => {
+        if (node?.name) {
+          self.addName(node);
+          if (objectTypes.includes(node.type)) objects.push(node.name);
+        }
+        const isControlTag = node.name && !objectTypes.includes(node.type);
+        // auto-infer missed toName if there is only one object tag in the config
+        if (isControlTag && !node.toname && objects.length === 1) {
+          node.toname = objects[0];
+        }
+        if (node && node.toname) {
+          self.upsertToName(node);
+        }
+        if (self.store.task && node.updateValue) node.updateValue(self.store);
+      });
+      // self.initialized = true;
+      self.selected.setupHotKeys();
+      return self.root;
+    }
+
+    function updateVideoSrc(newSrc){
+      let rootModel;
+      try {
+        const updatedXMLTag = `<Video name="video" value="${newSrc}" sync="audio,chart"></Video>`;
+        // rootModel = Tree.treeToModel(updatedXMLTag, self.store);
+        self.root.children[1].value = newSrc;
+        self.root.children[1]._value = newSrc;
+        return;
+      } catch (e) {
+        console.error(e);
+        return showError(e);
+      }
+    }
+
+    function updateTimeSeriesData(newSrc){
+      let rootModel;
+      try {
+        // rootModel = Tree.treeToModel(updatedXMLTag, self.store);
+        // self.root.children[1].value = newSrc;
+        // self.root.children[1]._value = newSrc;
+        const tsTags = Object.keys(newSrc).filter(src => src.toLocaleLowerCase() !== 'video');
+        for (let i=0; i<tsTags.length; i++) {
+          const rootChild = self.root.children?.find(child => child.name === tsTags[i]);
+          if (rootChild) {
+            rootChild.data = newSrc[tsTags[i]];
+            // rootChild.dataObj = newSrc[tsTags[i]];
+          }
+        }
+        return;
+      } catch (e) {
+        console.error(e);
+        return showError(e);
+      }
+    }
+
+    function getLabelColor(label){
+      try {
+        const { children } = self.root;
+        const labels = children?.find(child => child.name === 'tricks');
+        const selectedLabel = labels?.children?.find(lbl => lbl.value === label);
+        return selectedLabel?.background ?? null;
+      } catch (e) {
+        console.error(e);
+        return showError(e);
+      }
+    }
+
+    function getSelectedLabelColor(){
+      try {
+        const { children } = self.root;
+        const labels = children?.find(child => child.name === 'tricks');
+        const selectedLabel = labels?.children?.find(lbl => lbl.selected);
+        if (!selectedLabel) return null;
+        return selectedLabel?.background ?? null;
+      } catch (e) {
+        console.error(e);
+        return showError(e);
+      }
+    }
+
+    function getCurrentAnnotationRegions() {
+      if (self.viewingAll) {
+        const selectedAnnotation = self.selected;
+        const areas = selectedAnnotation?.areas?._data ? [...selectedAnnotation?.areas?._data] : [];
+        const selected = selectedAnnotation?.regionStore?.selectedIds? [...selectedAnnotation?.regionStore?.selectedIds] : [];
+        return areas?.map(d => ({ ...getSnapshot(d[1].value.storedValue), locked: d[1].value.storedValue?.locked, hidden: d[1].value.storedValue?.hidden, isSelected: selected.some(s => s === d[0]) }));
+      } else {
+        const selectedAnnotation = self.annotations.find(anno => anno.selected);
+        const areas = selectedAnnotation?.trackedState?.areas?._data ? [...selectedAnnotation?.trackedState?.areas?._data] : [];
+        const selected = selectedAnnotation?.regionStore?.selectedIds? [...selectedAnnotation?.regionStore?.selectedIds] : [];
+        return areas?.map(d => ({ ...getSnapshot(d[1].value.storedValue), locked: d[1].value.storedValue?.locked, hidden: d[1].value.storedValue?.hidden, isSelected: selected.some(s => s === d[0]) }));
+      }
+    }
+
+    function selectRegionById(regionId, isEditing = false) {
+      const selected = self.selected.regionStore.selectedIds;
+      const region = self.selected.regionStore.findRegion(regionId);
+      const labelings = region.labeling?.from_name?.selectedLabels;
+      if (selected.includes(regionId) && !isEditing) {
+        self.selected.regionStore.selection.unselect(region);
+        labelings?.map(lbl => {
+          lbl.toggleSelected?.();
+        });
+      }
+      else {
+        self.selected.regionStore.unselectAll();
+        self.selected.regionStore.selection.select(region);
+      }
+    }
+
+    function updateTaskTitle() {
+      const { config, taskMeta } = self.store;
+      if (!self.root) initRoot(config);
+      try {
+        const meta = JSON.parse(taskMeta);
+        const w_id = meta.workout_id;
+        const athlete_name = meta.username;
+        const header = self.root?.children?.find(itm => itm.type === 'header');
+        // const video = self.root?.children?.find(itm => itm.name === 'video');
+        // const videoUrl = video?._value;
+        // const duration = (video?.length) / Number(video?.framerate) || 0;
+        // const timeDate = new Date(duration * 1000000);
+        const onlyTime = meta.start_time?.split('.')[0];// timeDate.toISOString().match(/T(.*?)Z/)?.[1];
+        // const videoTitle = videoUrl?.split('/')?.pop() || 'video_title';
+        const headerTitle = `${athlete_name ?? ''} ${onlyTime ?? ''} ${w_id ? '- ' + w_id: ''}`;
+        // const headerTitle = `${athlete_name} ${onlyTime}`;
+        if (header && headerTitle.trim() !== '') header.value = headerTitle;
+      } catch(err) {
+        console.error("ERROR while parsing task meta", err);
+      }
+    }
+
+    function regionsStateChange() {
+      self.store?.annotationRegionsStateChanged?.();
+    }
+
     function findNonInteractivePredictionResults() {
       return self.predictions.reduce((results, prediction) => {
         return [
@@ -284,6 +524,29 @@ const AnnotationStoreModel = types
           ...prediction._initialAnnotationObj.filter(result => result.interactive_mode === false).map(r => ({ ...r })),
         ];
       }, []);
+    }
+
+    function getVideoUrl() {
+      const video = self.root?.children?.find(itm => itm.name === 'video');
+      const videoUrl = video?._value;
+      return videoUrl;
+    }
+
+    function getAnnotationOffset(selectedPk = null) {
+      const selectedOffset = self.selected.offset;
+      if (!selectedOffset || selectedOffset == 0) {
+        const { taskMeta } = self.store;
+        const pk = (selectedPk && !isNaN(Number(selectedPk))) ? Number(selectedPk) : Number(self.selected.pk);
+        const meta = JSON.parse(taskMeta);
+        const annotation_offsets = meta.annotations_offset || [];
+        const selectionOffset = annotation_offsets.find(o => `${o.annotation}` === `${pk}`)?.offset
+        const selected_offset = ((selectionOffset !== null && selectionOffset !== undefined) && !isNaN(Number(selectionOffset))) ? selectionOffset : meta.offset;
+        const returnValue =  selected_offset && !isNaN(selected_offset) ? selected_offset !== selectedOffset ? selected_offset: selectedOffset : 0;
+        return returnValue
+        // return selected_offset && !isNaN(selected_offset) ? selected_offset !== selectedOffset ? selected_offset: selectedOffset : 0;
+      } else {
+        return selectedOffset;
+      }
     }
 
     function createItem(options) {
@@ -509,6 +772,7 @@ const AnnotationStoreModel = types
     const afterCreate = () => {
       self._validator = new DataValidator();
       self._validator.addErrorCallback(handleErrors);
+      updateTaskTitle();
     };
 
     const beforeDestroy = () => {
@@ -537,6 +801,22 @@ const AnnotationStoreModel = types
       addToName,
       addName,
       upsertToName,
+      updateRoot,
+      updateLabels,
+      updateVideoSrc,
+      updateTimeSeriesData,
+
+      regionsStateChange,
+
+      getVideoUrl,
+
+      updateTaskTitle,
+      getAnnotationOffset,
+
+      getLabelColor,
+      getSelectedLabelColor,
+      getCurrentAnnotationRegions,
+      selectRegionById,
 
       addPrediction,
       addAnnotation,

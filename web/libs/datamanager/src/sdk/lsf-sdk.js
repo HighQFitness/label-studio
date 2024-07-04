@@ -28,6 +28,7 @@ import { CommentsSdk } from "./comments-sdk";
 // import { LSFHistory } from "./lsf-history";
 import { annotationToServer, taskToLSFormat } from "./lsf-utils";
 import { when } from 'mobx';
+import { getSnapshot, onSnapshot } from "mobx-state-tree";
 
 const DEFAULT_INTERFACES = [
   "basic",
@@ -63,6 +64,11 @@ export class LSFWrapper {
   /** @type {Task} */
   task = null;
 
+  /** @type {Task[]} */
+  taskList = null;
+
+  /** @type {any} */
+  taskMeta = {}
   /** @type {Annotation} */
   initialAnnotation = null;
 
@@ -81,6 +87,9 @@ export class LSFWrapper {
   /** @type {function} */
   interfacesModifier = (interfaces) => interfaces;
 
+  /** @type {any[]} */
+  usersLabel = [];
+
   /**
    *
    * @param {DataManager} dm
@@ -92,6 +101,7 @@ export class LSFWrapper {
     this.store = dm.store;
     this.root = element;
     this.task = options.task;
+    this.taskList = options.taskList;
     this.preload = options.preload;
     this.labelStream = options.isLabelStream ?? false;
     this.initialAnnotation = options.annotation;
@@ -142,8 +152,8 @@ export class LSFWrapper {
       interfaces.push("annotations:comments");
     }
 
-    console.group("Interfaces");
-    console.log([...interfaces]);
+    // console.group("Interfaces");
+    // console.log([...interfaces]);
 
     if (!this.shouldLoadNext()) {
       interfaces = interfaces.filter((item) => {
@@ -154,16 +164,58 @@ export class LSFWrapper {
       });
     }
 
-    console.log([...interfaces]);
-    console.groupEnd();
+    // console.log([...interfaces]);
+    // console.groupEnd();
     const queueTotal = dm.store.project.reviewer_queue_total || dm.store.project.queue_total;
     const queueDone = dm.store.project.queue_done;
     const queueLeft = dm.store.project.queue_left;
     const queuePosition = queueDone ? queueDone + 1 : queueLeft ? queueTotal - queueLeft + 1 : 1;
 
+
+    const tasksDataList = this.taskList.map(tsk => JSON.stringify(tsk.data));
+    let workoutId = '';
+    let fileName = '';
+    if(this.task?.data?.video) {
+      // const url = 'https://hqf-workouts-requests-dev.s3.us-west-2.amazonaws.com/workout/5c25a104-224f-48a0-8d40-6f8bab7ca7d8/2024-04-26_11-57-49_0.mp4'
+      workoutId =  this.task.storage_filename?.split('/')[1];
+      fileName = this.task.storage_filename ?? '';
+    }
+
+    console.log('workoutId (from storage_filename)', workoutId);
+
+    onSnapshot(options.task, snap => {
+      const annotationResults = snap.annotations.map(itm => JSON.parse(itm));
+      const drafts = snap.drafts;
+      const usersLabels = [];
+      for(let i=0; i< drafts.length; i++) {
+        const { result, user } = drafts[i];
+        const usedLabels = [];
+        const uniqueLabels = new Set();
+        result.forEach(itm => itm?.value?.labels && usedLabels.push(...itm?.value?.labels))
+        usedLabels.forEach(lbl => uniqueLabels.add(lbl));
+        usersLabels.push({ user, labels: [...uniqueLabels] })
+      }
+      for(let i=0; i< annotationResults.length; i++) {
+        const { result, completed_by: user } = annotationResults[i];
+        const usedLabels = [];
+        const uniqueLabels = new Set();
+        result.forEach(itm => usedLabels.push(...itm.value.labels))
+        usedLabels.forEach(lbl => uniqueLabels.add(lbl));
+        usersLabels.push({ user: user.email, labels: [...uniqueLabels] })
+      }
+      this.usersLabel = usersLabels;
+      this.lsfInstance?.store?.setUserLabel?.(usersLabels);
+      this.taskMeta = JSON.parse(snap.source)?.meta;
+      this.lsfInstance?.store?.setTaskMeta?.(this.taskMeta);
+      if (this.taskMeta?.workout_id) console.log('workoutId -> (from meta)', this.taskMeta?.workout_id);
+    })
+
+    let taskData = getSnapshot(this.task).data;
+
     const lsfProperties = {
       user: options.user,
       config: this.lsfConfig,
+      project:this.project,
       task: taskToLSFormat(this.task),
       description: this.instruction,
       interfaces,
@@ -174,6 +226,11 @@ export class LSFWrapper {
       messages: options.messages,
       queueTotal,
       queuePosition,
+      tasksDataList,
+      workoutId,
+      storage_filename: fileName,
+      userLabel: this.usersLabel,
+      taskData,
 
       /* EVENTS */
       onSubmitDraft: this.onSubmitDraft,
@@ -192,6 +249,8 @@ export class LSFWrapper {
       onSelectAnnotation: this.onSelectAnnotation,
       onNextTask: this.onNextTask,
       onPrevTask: this.onPrevTask,
+      onUpdateProject: this.onUpdateProject,
+      onUpdateOffset: this.onUpdateOffset,
     };
 
     this.initLabelStudio(lsfProperties);
@@ -565,6 +624,7 @@ export class LSFWrapper {
 
   /** @private */
   onSubmitAnnotation = async () => {
+    const currentOffset = this.lsfInstance?.store?.currentAnnotationOffset; //this.lsfInstance?.store?.getCurrentAnnotationOffset?.();
     const exitStream = this.shouldExitStream();
     const loadNext = exitStream ? false : this.shouldLoadNext();
     const result = await this.submitCurrentAnnotation("submitAnnotation", async (taskID, body) => {
@@ -578,7 +638,10 @@ export class LSFWrapper {
     }, false, loadNext);
     const status = result?.$meta?.status;
 
-    if (status === 200 || status === 201) this.datamanager.invoke("toast", { message: "Annotation saved successfully", type: "info" });
+    if (status === 200 || status === 201) {
+      this.datamanager.invoke("toast", { message: "Annotation saved successfully", type: "info" });
+      await this.lsfInstance?.store?.saveOffsetOnAnnotationSubmit?.(result?.id, currentOffset);
+    }
     else if (status !== undefined) this.datamanager.invoke("toast", { message: "There was an error saving your Annotation", type: "error" });
 
     if (exitStream) return this.exitStream();
@@ -900,12 +963,18 @@ export class LSFWrapper {
     const draftTime = Number(this.task.drafts[0]?.lead_time ?? 0);
     const lead_time = sessionTime + submittedTime + draftTime;
 
+    const currentOffset = this.lsfInstance?.store?.currentAnnotationOffset;
+    const taskOffset = this.taskMeta?.offset;
+
+    const annotationOffset = isNaN(Number(currentOffset)) ? currentOffset: isNaN(Number(taskOffset)) ? taskOffset : 0;
+
     const result = {
       lead_time,
       result: (draft ? annotation.versions.draft : annotation.serializeAnnotation()) ?? [],
       draft_id: annotation.draftId,
       parent_prediction: annotation.parent_prediction,
       parent_annotation: annotation.parent_annotation,
+      offset: annotationOffset,
     };
 
     if (includeId && userGenerate) {
@@ -933,6 +1002,65 @@ export class LSFWrapper {
 
     return result;
   }
+
+
+  /** @private */
+  onUpdateProject = async (newConfig) => {
+    const result = await this.datamanager.apiCall(
+        "updateProject",
+        {
+          pk: this.project.id,
+        },
+        {
+          body: {label_config: newConfig},
+        },
+      );
+    const status = result?.$meta?.status;
+    if (status === 200 || status === 201) this.datamanager.invoke("toast", { message: "Labels configuration updated successfully", type: "info" });
+    else if (status !== undefined) this.datamanager.invoke("toast", { message: "There was an error updating your Labels configuration", type: "error" });
+    return status && (status === 200 || status === 201);
+  };
+
+  /** @private */
+  onUpdateOffset = async (offset, annotation = null) => {
+    let data = {};
+    if ((annotation !== null && annotation !== undefined) && !isNaN(Number(annotation))) {
+      const existingOffsets = this.taskMeta.annotations_offset || [];
+      const index = existingOffsets.findIndex(o => o.annotation === annotation);
+      if (index > -1) {
+        existingOffsets[index] = {
+          offset,
+          annotation,
+        }
+      } else {
+        existingOffsets.push({ offset, annotation })
+      }
+      data = {
+        annotations_offset: [
+          ...existingOffsets,
+        ]
+      };
+      const result = await this.datamanager.apiCall(
+        "updateOffset",
+        {
+          taskId: this.task.id,
+        },
+        {
+          body: {meta: { ...this.taskMeta, ...data }},
+        },
+      );
+    const status = result?.$meta?.status;
+    if (status === 200 || status === 201) {
+      this.datamanager.invoke("toast", { message: "Offset updated successfully", type: "info" });
+      if (result.meta) {
+        this.taskMeta = result.meta;
+        this.lsfInstance?.store?.setTaskMeta?.(result.meta);
+      }
+    }
+    else if (status !== undefined) this.datamanager.invoke("toast", { message: "There was an error updating your task offset value", type: "error" });
+    return status && (status === 200 || status === 201);
+    }
+  };
 
   destroy() {
     this.lsfInstance?.destroy?.();

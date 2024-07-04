@@ -14,7 +14,7 @@ export const MenuLayout = ({ children, ...routeProps }) => {
     <SidebarMenu
       menuItems={[
         GeneralSettings,
-        LabelingSettings,
+        // LabelingSettings,
         InstructionsSettings,
         MachineLearningSettings,
         StorageSettings,
@@ -35,7 +35,7 @@ export const SettingsPage = {
   component: GeneralSettings,
   pages: {
     InstructionsSettings,
-    LabelingSettings,
+    // LabelingSettings,
     MachineLearningSettings,
     StorageSettings,
     WebhookPage,

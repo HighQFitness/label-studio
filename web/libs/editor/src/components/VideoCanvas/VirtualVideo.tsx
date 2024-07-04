@@ -5,6 +5,7 @@ import { FF_LSDV_4711, isFF } from '../../utils/feature-flags';
 
 type VirtualVideoProps = DetailedHTMLProps<VideoHTMLAttributes<HTMLVideoElement>, HTMLVideoElement> & {
   canPlayType?: (supported: boolean) => void,
+  customIdPrefix?: string,
 };
 
 const DEBUG_MODE = false;
@@ -87,7 +88,7 @@ export const VirtualVideo = forwardRef<HTMLVideoElement, VirtualVideoProps>((pro
 
   const createVideoElement = useCallback(() => {
     const videoEl = document.createElement('video');
-
+    if (props.customIdPrefix) videoEl.id = `${props.customIdPrefix}-video-element`;
     videoEl.muted = !!props.muted;
     videoEl.controls = false;
     videoEl.preload = 'auto';
@@ -199,7 +200,7 @@ export const VirtualVideo = forwardRef<HTMLVideoElement, VirtualVideoProps>((pro
       video.current?.remove();
       video.current = null;
     };
-  }, []);
+  }, [props.src]);
 
   useEffect(() => {
     if (video.current && props.muted !== undefined) {

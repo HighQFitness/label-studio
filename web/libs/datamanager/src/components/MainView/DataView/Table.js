@@ -126,7 +126,9 @@ export const DataView = injector(
           window.open(`./?task=${itemID}`, "_blank");
         } else {
           if (isFF(FF_OPTIC_2)) store._sdk.lsf?.saveDraft();
-          getRoot(view).startLabeling(item);
+          // store._sdk.lsf?.saveDraft();
+          // getRoot(view).startLabeling(item);
+          window.location.replace(window.location.pathname+`?task=${item.id}`)
         }
       },
       [view, columns],

@@ -46,6 +46,8 @@ export const Annotation = types
     // @todo reverted back to wrong type; maybe it breaks all the deserialisation
     pk: types.maybeNull(types.string),
 
+    offset: types.maybeNull(types.number),
+
     selected: types.optional(types.boolean, false),
     type: types.enumeration(['annotation', 'prediction', 'history']),
 
@@ -806,6 +808,7 @@ export const Annotation = types
       // Hotkeys setup
       self.traverseTree(node => {
         if (node && node.onHotKey && node.hotkey) {
+          if(node?.type === 'label' && !node?.value) return; 
           hotkeys.addKey(node.hotkey, node.onHotKey, undefined, node.hotkeyScope);
         }
       });
@@ -829,6 +832,7 @@ export const Annotation = types
          * Hotkey for controls
          */
         if (node && node.onHotKey && !node.hotkey) {
+          if(node?.type === 'label' && !node?.value) return;
           const comb = hotkeys.makeComb();
 
           if (!comb) return;

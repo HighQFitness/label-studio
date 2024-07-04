@@ -105,6 +105,12 @@ export const create = (columns) => {
 
         self.annotations = annotations[0];
       }),
+
+      reAssignData(newData) {
+        if (typeof newData !== 'string' || newData.trim() === '') return;
+        self.data = newData;
+        return self; 
+      }
     }));
 
   const TaskModel = types.compose("TaskModel", TaskModelBase, DataStoreItem);
