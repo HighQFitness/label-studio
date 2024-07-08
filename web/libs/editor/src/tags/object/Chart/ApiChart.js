@@ -31,6 +31,61 @@ const appliedOffset = (() => {
     };
 })();
 
+const timeLapsed = (() => {
+    let timeLapsed = 0;
+    let timeLapseVerCurrentStart = 0;
+    let timeLapseVerLastTimeRendered = 0;
+    let totalIterations = 1;
+    let currentIteration = 1;
+     const obj = {
+        incrementInterval: function() {
+            timeLapsed += (TIME_SLAB_SEC);
+        },
+        getTimeLapsed: function() {
+            return timeLapsed;
+        },
+        setTimeLapsed: function(newTime) {
+            timeLapsed = newTime;
+        },
+        resetTimeLapsed: function() {
+            timeLapsed = 0;
+            timeLapseVerCurrentStart = 0;
+            timeLapseVerLastTimeRendered = 0;
+            currentIteration = 1;
+        },
+        handleResumeIncrement: function() {
+            //TODO handle the time to resume the chart update time,
+            //when video is paused and then user plays the video.
+        },
+        setCurrentTime: function(newVal) { timeLapseVerCurrentStart = newVal; },
+        getCurrentTime: function() { return timeLapseVerCurrentStart; },
+        setLastRenderedTime: function(newVal) { timeLapseVerLastTimeRendered = newVal; },
+        getLastRenderedTime: function() { return timeLapseVerLastTimeRendered; },
+        setTotalIterations: function (iterations) { totalIterations = iterations; },
+        getTotalIterations: function () { return totalIterations; },
+        setCurrentIteration: function (iteration) { currentIteration = iteration; },
+        getCurrentIteration: function () { return currentIteration; },
+        incrementCurrentIteration: function () { currentIteration += 1; },
+        isLastIteration: function () { return currentIteration === totalIterations; },
+    }
+    return obj;
+})();
+
+const currentTime = (() => {
+    let currentTime = 0;
+  
+    function setCurrentTime(newVal) {
+        currentTime = newVal;
+    }
+  
+    function getCurrentTime() { return currentTime; }
+  
+    return {
+        setCurrentTime,
+        getCurrentTime,
+    };
+  })();
+
 const ApiChartView = ({ item, store }) => {
     /**
      * Actual Chart Comp
@@ -180,7 +235,7 @@ const ApiChartView = ({ item, store }) => {
                     const newOffset = store.annotationStore.getAnnotationOffset();
                     setOffset(newOffset);
                     const btn = document.getElementById('btn-apply-offset');
-                    btn.click?.();
+                    btn?.click?.();
                     // await applyOffset(null, true, newOffset);
                     setToRenderAcc([]);
                     setToRenderGyro([]);
@@ -188,6 +243,27 @@ const ApiChartView = ({ item, store }) => {
             }
         }
     }, [videoElemUp, apiData]);
+
+    const [currVideoTime, setCurrVideoTIme] = useState(timeLapsed.getTimeLapsed());
+    const [nearestTick, setNearestTick] = useState(null);
+    useEffect(() => {
+        const videoElem = document.getElementById(`${VIDEO_CUSTOM_ID_PREFIX}-video-element`);
+        if (videoElem) {
+            videoElem?.addEventListener('timeupdate', function(event) {
+                const currentTime = videoElem?.currentTime;
+                    timeLapsed.setTimeLapsed(currentTime);
+                    setCurrVideoTIme(currentTime);
+            });
+        }
+
+        return () => {
+            videoElem?.removeEventListener?.('timeupdate');
+        }
+    }, [videoElemUp]);
+
+    useEffect(() => {
+        setCurrVideoTIme(timeLapsed.getTimeLapsed());
+    }, [timeLapsed.getTimeLapsed()]);
 
     useEffect(() => {
         const tempGyroSelection = [...toRenderGyro];
@@ -271,9 +347,12 @@ const ApiChartView = ({ item, store }) => {
                 type='gyro'
                 offset={offset}
                 offsetUpdated={offsetUpdated}
+                timeToMove={currentTime.getCurrentTime()}
+                setNearestTick={(tick) => setNearestTick(tick)}
+                currentNearestTick={nearestTick}
             />
         ))
-    }, [toRenderGyro.length, chartsData, appliedOffset.getAppliedOffset()]);
+    }, [toRenderGyro.length, chartsData, appliedOffset.getAppliedOffset(), currentTime.getCurrentTime(), nearestTick]);
 
     const renderMultiLineChartsAcc = useCallback(() => {
         return toRenderAcc.map((itm, idx) => (
@@ -285,9 +364,12 @@ const ApiChartView = ({ item, store }) => {
                 type='accel'
                 offset={offset}
                 offsetUpdated={offsetUpdated}
+                timeToMove={currentTime.getCurrentTime()}
+                setNearestTick={(tick) => setNearestTick(tick)}
+                currentNearestTick={nearestTick}
             />
         ))
-    }, [toRenderAcc.length, chartsData, appliedOffset.getAppliedOffset()]);
+    }, [toRenderAcc.length, chartsData, appliedOffset.getAppliedOffset(), currentTime.getCurrentTime(), nearestTick]);
 
     const onCheckboxChangeGyro = (checkedValues) => {
         setToRenderGyro([...checkedValues]);
@@ -305,6 +387,21 @@ const ApiChartView = ({ item, store }) => {
         const flag = !offsetCollapsed;
         window.localStorage.setItem('showOffset', `${flag}`);
         setOffsetCollapsed(flag);
+    };
+
+    const [timeToMove, setTImeToMove] = useState(0);
+
+    const applyTime =(e = null, forceApply = false, forceValue=null) => {
+        if (
+            timeToMove > -1 && timeToMove !== (currentTime.getCurrentTime() * 1000)
+        ) {
+            currentTime.setCurrentTime(timeToMove / 1000)
+        }
+    };
+
+    const onChangeTime = (value) => {
+        setTImeToMove(value);
+        // applyTime();
     };
 
     return (
@@ -354,6 +451,46 @@ const ApiChartView = ({ item, store }) => {
                     </>
                 }
             </div>
+            <div style={{ display: 'flex', justifyContent: 'start', alignItems: 'stretch', margin: '0.45rem auto', position: 'relative' }}>
+                        <span style={{
+                        display: 'flex',
+                        justifyContent: 'start',
+                        alignItems: 'stretch',
+                        margin: 'auto 0.45rem'
+                    }}>
+                        <span style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }} >
+                            <p style={{ fontWeight: 'bold', margin: '0', padding: '0' }}>Current Time Emitted by Video :&nbsp;</p>
+                        </span>
+                        <p style={{ display: 'flex', height: '100%', justifyContent: 'center', alignItems: 'center', margin: '0', padding: '0' }}>{currVideoTime}</p>
+                        {/* <InputNumber
+                            min={0}
+                            max={21572}
+                            value={timeToMove} onChange={onChangeTime}
+                            className="[&::-webkit-inner-spin-button]:appearance-none"
+                            changeOnWheel={false}
+                            disabled={item.playing || item.errors?.length || loading}
+                        /> */}
+                    </span>
+                    {/* <Button
+                        style={{ height: 'inherit' }}
+                        onClick={applyTime}
+                        disabled={item.playing || item.errors?.length || loading}
+                        id={'btn-move-cursor'}
+                    >Move Cursor</Button> */}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'start', alignItems: 'stretch', margin: '0.45rem auto', position: 'relative' }}>
+                        <span style={{
+                        display: 'flex',
+                        justifyContent: 'start',
+                        alignItems: 'stretch',
+                        margin: 'auto 0.45rem'
+                    }}>
+                        <span style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }} >
+                            <p style={{ margin: '0', padding: '0' }}>Nearest Tick/Label (timeStamp) :&nbsp;~&nbsp;</p>
+                        </span>
+                        <p style={{ display: 'flex', height: '100%', justifyContent: 'center', alignItems: 'center', margin: '0', padding: '0' }}>{nearestTick}</p>
+                    </span>
+                </div>
             {
                 (!loading && !(errMsg && errMsg.trim() !== "")) &&
                 <div style={{ width: '100%', display: 'flex', alignItems: 'stretch' }}>

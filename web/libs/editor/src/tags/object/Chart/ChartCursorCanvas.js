@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { CHART_TIME_SLAB, VIDEO_CUSTOM_ID_PREFIX } from '../../../utils/constants';
 
@@ -13,6 +13,10 @@ const ChartCursorCanvas = ({
     title,
     totalSeconds,
     type,
+    timeToMove,
+    chartData,
+    getLinePixelPosition,
+    offset
 }) => {
     
     const [height, setHeight] = useState(canvasHeight);
@@ -57,6 +61,30 @@ const ChartCursorCanvas = ({
         return obj;
     })();
 
+    const offSet= (() => {
+        let off_set = 0;
+        return {
+            setOffset: function setOffset(val) { off_set = val; },
+            getOffset: function getOffset() { return off_set; }
+        };
+    })();
+
+    const dataArray = (() => {
+        let data = [];
+        return {
+            setData :function setData(newArr) { data = [...newArr]; },
+            getData: function getData() { return data; },
+        };
+    })();
+
+    useEffect(() => {
+        offSet.setOffset(offset);
+    }, [offset]);
+
+    useEffect(() => {
+        dataArray.setData(chartData);
+    }, [chartData]);
+
     const convertTimeToPx = (time, canvas) => {
         // const canvas = canvasRef.current;
         // return ((time % (TIME_SLAB_SEC)) / (TIME_SLAB_SEC)) * (canvas.width);
@@ -66,26 +94,27 @@ const ChartCursorCanvas = ({
         return px;
     };
 
-    const drawCursor = () => {
+    const formatTimeStamps = (timeInMilliSeconds) => {
+        const sign = timeInMilliSeconds < 0 ? 1: 0;
+        const timeDate = new Date(Math.abs(timeInMilliSeconds));
+        // const timeStampStr = `${sign ? '-' + timeDate.toISOString().match(/T(.*?)Z/)?.[1]?.split('.')[0] : timeDate.toISOString().match(/T(.*?)Z/)?.[1]?.split('.')[0]}`;
+        const timeStampStr = `${sign ? '-' + timeDate.toISOString().match(/T(.*?)Z/)?.[1] : timeDate.toISOString().match(/T(.*?)Z/)?.[1]}`;
+        return timeStampStr;
+    };
+
+    const drawCursor = (overrideTime = null, offsetParam) => {
         if (renderedChart && renderedChart !== undefined) {
-            const currentTimeLapsed = timeLapsed.getCurrentTime();
-            const canvasEl = document.getElementById(`${type}-${title}-chart-canvas-cursor`);
-            if (!canvasEl) return;
-            const progress =  (currentTimeLapsed / (TIME_SLAB_SEC)) * COMMON_DIVIDER;
-            const newX = convertTimeToPx(currentTimeLapsed, canvasEl); // ((((progress) / (COMMON_DIVIDER))) * (canvasEl.width));
-            // const dpi = window.devicePixelRatio;
-            // canvasEl.getContext('2d').scale(dpi, dpi);
-            console.log('*-*-*-currentTimeLapsed-*-*-*',currentTimeLapsed);
-            console.log('*-*-*-newX-*-*-*',newX);
-            const ctx = canvasEl.getContext('2d');
-            ctx.imageSmoothingEnabled = false;
-            ctx.clearRect(0, 0, canvasEl.width, canvasEl.height); // Clear canvas
-            ctx.beginPath();
-            ctx.moveTo(newX, 0);
-            ctx.lineTo(newX, height);
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 1;
-            ctx.stroke();
+            const currentTimeLapsed = (overrideTime !== null && !isNaN(Number(overrideTime))) ? overrideTime :  timeLapsed.getCurrentTime();
+
+            const off_set = offsetParam;
+
+            const calcTime = ((currentTimeLapsed * 1000) + off_set );
+
+            // console.log('*-*-*-*-*-*-calcTime-*-*-*-*-*-*-*-*', calcTime);
+
+            const valueTick = dataArray.getData().find((v) => (Number(v.timestamp) >= (calcTime)));
+            let tickPos = -1;
+            if(valueTick) tickPos = getLinePixelPosition(Number(valueTick.timestamp));
         }
     };
 
@@ -93,9 +122,11 @@ const ChartCursorCanvas = ({
         const videoElement = document.getElementById(`${VIDEO_CUSTOM_ID_PREFIX}-video-element`);
         const totalIteration = Math.round(Math.ceil(totalSeconds / (TIME_SLAB_SEC)));
         timeLapsed.setTotalIterations(totalIteration);
-        timeLapsed.setTimeLapsed(videoElement?.currentTime);
-        timeLapsed.setLastRenderedTime(videoElement?.currentTime);
-        drawCursor();
+        if (!isNaN(Number(videoElement?.currentTime))) {
+            timeLapsed.setTimeLapsed(videoElement?.currentTime);
+            timeLapsed.setLastRenderedTime(videoElement?.currentTime);
+            // drawCursor(null, offset);
+        }
         videoElement?.addEventListener('timeupdate', function(event) {
             const currentTime = videoElement?.currentTime;
                 const iteration = currentTime == 0 ? 1 : Math.round(Math.ceil(currentTime / (TIME_SLAB_SEC)));
@@ -112,7 +143,7 @@ const ChartCursorCanvas = ({
                     timeLapsed.setLastRenderedTime(currentTime);
                 }
                 if (iteration !== timeLapsed.getCurrentIteration()) timeLapsed.setCurrentIteration(iteration);
-                drawCursor();
+                drawCursor(null, offset);
                 return;
         });
 
@@ -124,16 +155,23 @@ const ChartCursorCanvas = ({
             videoElement?.removeEventListener?.('timeupdate');
             videoElement?.removeEventListener?.('ended');
         }
-    }, []);
+    }, [chartData, offset]);
+
+    useEffect(() => {
+        const iteration = timeToMove < TIME_SLAB_SEC ? 1 : Math.round(Math.ceil(timeToMove / (TIME_SLAB_SEC)));
+        const condition = iteration === timeLapsed.getCurrentIteration();
+        if (!condition) timeLapsed.setCurrentIteration(iteration);
+        drawCursor(timeToMove, offset);
+    }, [timeToMove]);
 
     useEffect(() => {
         setHeight(renderedChart?.scales?.y?.height + 7);
-        const canvasEl = document.getElementById(`${type}-${title}-chart-canvas-cursor`);
-        if (canvasEl) {
-            canvasEl.style.height = renderedChart?.scales?.y?.height + 7;
-            canvasEl.style.width = canvasWidth;
-        }
-        drawCursor();
+    //     const canvasEl = document.getElementById(`${type}-${title}-chart-canvas-cursor`);
+    //     if (canvasEl) {
+    //         canvasEl.style.height = renderedChart?.scales?.y?.height + 7;
+    //         canvasEl.style.width = canvasWidth;
+    //     }
+        // drawCursor();
     }, [renderedChart?.scales?.y?.height, canvasWidth]);
 
     return (
@@ -149,7 +187,7 @@ const ChartCursorCanvas = ({
                 pointerEvents: 'none',
             }
         }>
-            <canvas width={canvasWidth} height={canvasHeight} style={{ width: canvasWidth, height: height, pointerEvents: 'none' }} id={`${type}-${title}-chart-canvas-cursor`} />
+            {/* {<canvas width={canvasWidth} height={canvasHeight} style={{ width: canvasWidth, height: height, pointerEvents: 'none' }} id={`${type}-${title}-chart-canvas-cursor`} />} */}
         </div>
     );
 };

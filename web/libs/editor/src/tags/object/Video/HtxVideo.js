@@ -529,7 +529,7 @@ const HtxVideoView = ({ item, store }) => {
         if ((!isNaN(Number(containerWidth))) && rootElemWidth !== containerWidth) setRootElemWidth(containerWidth);
     if (videoDimensions && videoDimensions.width > 0) {
       if (showThumbnails) {
-        const widthCalc = ( videoDimensions.width >= containerWidth ? containerWidth - (CANVAS_WIDTH_FACTOR + 70) : (videoDimensions.width - CANVAS_WIDTH_FACTOR));
+        const widthCalc = ( videoDimensions.width >= containerWidth ? containerWidth - (CANVAS_WIDTH_FACTOR + 70) : (containerWidth - CANVAS_WIDTH_FACTOR));
         if (calculatedWidth !== widthCalc) setCalculatedWidth(widthCalc);
       } else {
         const remainingWidth = containerWidth - calculatedWidth;

@@ -7,5 +7,5 @@ export const VIDEO_CUSTOM_ID_PREFIX = 'labeling-video';
  */
 export const TEMP_WORKOUT_ID = 'undefined'; // 'b9632f23-5e01-40b2-9566-b558d38d4100';
 export const CHART_TIME_SLAB = 10 * 1000; // 10 seconds converted to milliseconds
-export const VERSION = '1.3.4'; // A variable to determine editor's version, when deployed.
+export const VERSION = '1.3.6'; // A variable to determine editor's version, when deployed.
 export const FALLBACK_STORAGE_FILE_NAME  = ''
