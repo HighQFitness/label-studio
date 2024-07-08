@@ -13,7 +13,7 @@ const frameRate = 1000;
 const TIME_SLAB_SEC = CHART_TIME_SLAB / 1000;
 
 
-const MultiLineChart = inject('store')(observer(({ store, data, title, item, type, offset, offsetUpdated }) => {
+const MultiLineChart = inject('store')(observer(({ store, data, title, item, type, offset, offsetUpdated, timeToMove, setNearestTick, currentNearestTick }) => {
     const timeLapsed = (() => {
         let timeLapsed = 0;
         let timeLapseVerCurrentStart = 0;
@@ -95,7 +95,9 @@ const MultiLineChart = inject('store')(observer(({ store, data, title, item, typ
 
     const getStart = () => {
         const currentIteration  = timeLapsed.getCurrentIteration();
-        if (currentIteration <= 1) return 0;
+        if (currentIteration <= 1) {
+            return 0;
+        }
         return ((currentIteration - 1) * TIME_SLAB_SEC) + 1;
     };
 
@@ -103,11 +105,12 @@ const MultiLineChart = inject('store')(observer(({ store, data, title, item, typ
         isSeeked ? setCurrentTimePosition(timeLapsedParam) : setCurrentTimePosition(0);
         const time = getTimeLapsedCalculated();
         const start = getStart();
+        const startDiff = Math.abs(start - Number(data[0].timestamp));
         const end = Math.round(time + (TIME_SLAB_SEC)) > durationFormatted ? 
         Math.round(durationFormatted)
         :
         Math.round(time + (TIME_SLAB_SEC));
-        const startIdx = data.findIndex(itm => Number(itm.timestamp) >= (((start - 1)  * 1000) + offset));
+        const startIdx = data.findIndex(itm => Number(itm.timestamp) >= (((start - 1)  * 1000) + (offset + startDiff)));
         const lessEntries = Number(data[data.length -1].timestamp) < (end * 1000) && startIdx >= 0;
         const endIdx = lessEntries ? data.length -1 : data.findIndex(itm => Number(itm.timestamp) >= (end * 1000));
         const temp = endIdx > 0 ? data.slice(startIdx, endIdx) : [
@@ -140,6 +143,16 @@ const MultiLineChart = inject('store')(observer(({ store, data, title, item, typ
                 i += step;
             }
         }
+        // console.groupCollapsed('*-*-*-RenderingDataLogs');
+        // console.log('*-*-*-start-*-*-*',start);
+        // console.log('*-*-*-((start - 1)  * 1000) + offset)-*-*-*',(((start)  * 1000) + offset));
+        // console.log('*-*-*-startDiff-*-*-*',startDiff);
+        // console.log('*-*-*-offset-*-*-*',offset);
+        // console.log('*-*-*-startIdx-*-*-*',startIdx);
+        // console.log('*-*-*-time-*-*-*',time);
+        // console.log('*-*-*-StartIndexObj-*-*-*',data[startIdx]);
+        // console.log('*-*-*-data-*-*-*',data);
+        // console.groupEnd();
         const shouldUpdateAnyway = forceReCalculate || (start !== timeLapsed.getLastRenderedTime());
         setChartData([...temp], (forceReCalculate || shouldUpdateAnyway));
         setCurrentStart(end);
@@ -202,6 +215,13 @@ const MultiLineChart = inject('store')(observer(({ store, data, title, item, typ
     }, [item.playedTime]);
 
     useEffect(() => {
+            const iteration = timeToMove < TIME_SLAB_SEC ? 1 : Math.round(Math.ceil(timeToMove / (TIME_SLAB_SEC)));
+            const condition = iteration === timeLapsed.getCurrentIteration();
+            if (!condition) timeLapsed.setCurrentIteration(iteration);
+            updateChartData(timeToMove, true);
+    }, [timeToMove]);
+
+    useEffect(() => {
         const totalIterations = Math.round(Math.ceil(durationFormatted / (TIME_SLAB_SEC)));
         timeLapsed.setTotalIterations(totalIterations);
         const videoElement = document.getElementById(`${VIDEO_CUSTOM_ID_PREFIX}-video-element`);
@@ -230,6 +250,10 @@ const MultiLineChart = inject('store')(observer(({ store, data, title, item, typ
                         item={item}
                         store={store}
                         currentSlab={timeLapsed.getCurrentIteration()}
+                        timeToMove={timeToMove}
+                        setNearestTick={setNearestTick}
+                        offset={offset}
+                        currentNearestTick={currentNearestTick}
                     />
                     <div
                         style={

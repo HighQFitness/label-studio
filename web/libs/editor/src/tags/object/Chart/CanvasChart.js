@@ -5,7 +5,7 @@ import ChartCursorCanvas from './ChartCursorCanvas';
 import { inject, observer } from 'mobx-react';
 import ChartRegionsCanvas from './ChartRegionsCanvas';
 import { nanoid } from 'nanoid';
-import { CHART_TIME_SLAB } from '../../../utils/constants';
+import { CHART_TIME_SLAB, VIDEO_CUSTOM_ID_PREFIX } from '../../../utils/constants';
 
 const TIME_SLAB_SEC = CHART_TIME_SLAB / 1000;
 
@@ -21,47 +21,99 @@ const LINE_BORDER_X = 'rgba(248, 153, 81, 1)';
 const LINE_BORDER_Y = 'rgba(135, 187, 132, 1)';
 const LINE_BORDER_Z = 'rgba(144, 180, 211, 1)';
 
+// const chartHoverCorsairPlugin = {
+//     id: 'corsair',
+//     defaults: {
+//         width: 1,
+//         color: '#FF4949',
+//         dash: [3, 3],
+//     },
+//     afterInit: (chart, args, opts) => {
+//       chart.corsair = {
+//         x: 0,
+//         y: 0,
+//       }
+//     },
+//     afterEvent: (chart, args) => {
+//       const {inChartArea} = args
+//       const {type,x,y} = args.event
+
+//       chart.corsair = {x, y, draw: inChartArea}
+//       chart.draw()
+//     },
+//     beforeDatasetsDraw: (chart, args, opts) => {
+//       const {ctx} = chart
+//       const {top, bottom, left, right} = chart.chartArea
+//       const {x, y, draw} = chart.corsair
+//       if (!draw) return
+
+//       ctx.save()
+      
+//       ctx.beginPath()
+//       ctx.lineWidth = opts.width
+//       ctx.strokeStyle = opts.color
+//       ctx.setLineDash(opts.dash)
+//       ctx.moveTo(x, bottom)
+//       ctx.lineTo(x, top)
+//       ctx.moveTo(left, y)
+//       ctx.lineTo(right, y)
+//       ctx.stroke()
+      
+//       ctx.restore()
+//     }
+//   };
+
+
 const chartHoverCorsairPlugin = {
     id: 'corsair',
     defaults: {
-        width: 1,
-        color: '#FF4949',
-        dash: [3, 3],
+      width: 1,
+      color: '#000',
+      zIndex: 10, // Example: Set a zIndex to bring the line to front
     },
     afterInit: (chart, args, opts) => {
       chart.corsair = {
-        x: 0,
+        x: null, // Initialize x coordinate as null
         y: 0,
+        draw: false,
+      };
+    },
+    setCursorX: (chart, x) => {
+      chart.corsair.x = x;
+      chart.corsair.draw = true;
+      chart.draw();
+    },
+    afterDraw: (chart, args, opts) => {
+      const { ctx } = chart;
+      const { top, bottom } = chart.chartArea;
+      const { x, draw } = chart.corsair;
+  
+      if (!draw || x === null) return;
+  
+      ctx.save();
+
+      // Adjust the zIndex if specified in defaults
+    if (opts.zIndex) {
+        ctx.canvas.style.zIndex = opts.zIndex;
       }
-    },
-    afterEvent: (chart, args) => {
-      const {inChartArea} = args
-      const {type,x,y} = args.event
+  
+      ctx.beginPath();
+      ctx.lineWidth = opts.width;
+      ctx.strokeStyle = opts.color;
+      ctx.moveTo(x, bottom - 2);
+      ctx.lineTo(x, top - 8); // Draw only the vertical line
+      ctx.stroke();
+  
+      ctx.restore();
 
-      chart.corsair = {x, y, draw: inChartArea}
-      chart.draw()
-    },
-    beforeDatasetsDraw: (chart, args, opts) => {
-      const {ctx} = chart
-      const {top, bottom, left, right} = chart.chartArea
-      const {x, y, draw} = chart.corsair
-      if (!draw) return
-
-      ctx.save()
-      
-      ctx.beginPath()
-      ctx.lineWidth = opts.width
-      ctx.strokeStyle = opts.color
-      ctx.setLineDash(opts.dash)
-      ctx.moveTo(x, bottom)
-      ctx.lineTo(x, top)
-      ctx.moveTo(left, y)
-      ctx.lineTo(right, y)
-      ctx.stroke()
-      
-      ctx.restore()
+      // Reset canvas zIndex after drawing
+    if (opts.zIndex) {
+        ctx.canvas.style.zIndex = 'initial';
+      }
     }
   };
+  
+  
 
 const formatTimeStamps = (timeInMilliSeconds) => {
     const sign = timeInMilliSeconds < 0 ? 1: 0;
@@ -72,13 +124,27 @@ const formatTimeStamps = (timeInMilliSeconds) => {
 };
 
 
-const CanvasChart = inject('store')(observer(({ chartData, totalSeconds, end, currentTime, title, type, item, store, currentSlab }) => {
+const CanvasChart = inject('store')(observer(({
+    chartData,
+    totalSeconds,
+    end,
+    currentTime,
+    title,
+    type,
+    item,
+    store,
+    currentSlab,
+    timeToMove,
+    setNearestTick,
+    offset,
+    currentNearestTick
+}) => {
     /**
      * Actual Chart Comp
      */
     const id = nanoid();
 
-    const CHART_PLUGIN = [];
+    const CHART_PLUGIN = [chartHoverCorsairPlugin];
 
     const CHART_OPTIONS = {
         maintainAspectRatio: false,
@@ -91,9 +157,6 @@ const CanvasChart = inject('store')(observer(({ chartData, totalSeconds, end, cu
                 ticks: {
                     //   // For a category axis, the val is the index so the lookup via getLabelForValue is needed
                       callback: function(val, index) {
-                        // console.log('****val', val);
-                        // console.log('****this.getLabelForValue(val)', this.getLabelForValue(val));
-                        // console.log('****index', index);
                         const timeStamp = (Number(this.getLabelForValue(val)));
                         const label = timeStamp ? `${formatTimeStamps(timeStamp)}` : this.getLabelForValue(val);
                         return label;
@@ -111,6 +174,51 @@ const CanvasChart = inject('store')(observer(({ chartData, totalSeconds, end, cu
             },
         },
     }
+
+    function getLinePixelPosition(dataValue) {
+        if (renderedChart && renderedChart !== null){
+            // console.log('*-*-*-*-*-*-****************************dataValue***', dataValue);
+
+            const index = renderedChart.data.labels.indexOf(`${(dataValue)}`);
+            
+            if (index !== -1) {
+              // Get the pixel position of the matching data point
+            //   const dataIndex = renderedChart.data.datasets[0].index; 
+              const meta = renderedChart.getDatasetMeta(0);
+              const pixelPosition = meta.data[index]?.x;
+            const zIndex = 10; // Specify the zIndex to bring the line to front
+            chartHoverCorsairPlugin.defaults.zIndex = zIndex;
+            chartHoverCorsairPlugin.setCursorX(renderedChart, pixelPosition);
+            setNearestTick?.(dataValue);
+              return pixelPosition;
+            }
+        }
+        
+        // Handle case where dataValue is not found
+        console.error(`Data value ${dataValue} not found in chart data.`);
+        return null;
+      }
+
+      useEffect(() => {
+        if (!isNaN(Number(currentNearestTick)) && (renderedChart && renderedChart !== null)) {
+            const videoElement = document.getElementById(`${VIDEO_CUSTOM_ID_PREFIX}-video-element`);
+            const currentTimeLapsed = videoElement?.currentTime ?? 0;
+
+            const calcTime = ((currentTimeLapsed * 1000) + offset );
+            const valueTick = chartData.find((v) => (Number(v.timestamp) >= (calcTime)));
+            // getLinePixelPosition(newTickTimeStamp);
+            if (!isNaN(Number(valueTick?.timestamp))) {
+                /**
+                 * TODO; Following needs to be refactored, as it is a redundant call for same parameters.
+                 * Currently it needs to be called twice to move the IMU progress cursor onto the correct calculated timestamp tick, upon offset change.
+                 */
+                getLinePixelPosition(Number(valueTick?.timestamp));
+                setTimeout(() => {
+                    getLinePixelPosition(Number(valueTick?.timestamp));
+                }, 10);
+            }
+        }
+      }, [offset]);
 
     const chartRef = useRef(null);
 
@@ -326,6 +434,7 @@ const CanvasChart = inject('store')(observer(({ chartData, totalSeconds, end, cu
         }
         renderChart.plugins = CHART_PLUGIN;
         renderedChart.update();
+        // if (!isNaN(Number(currentNearestTick))) getLinePixelPosition(currentNearestTick);
     };
 
     useEffect(() => {
@@ -358,21 +467,21 @@ const CanvasChart = inject('store')(observer(({ chartData, totalSeconds, end, cu
         <Block name="multiline-chart-canvas">
             <canvas height={200} ref={chartRef} id={`chart-canvas-${title}-${type}-${id}`} />
             {
-                (renderedChart && renderedChart !== undefined)
-                &&
-                <ChartRegionsCanvas
-                    canvasWidth={renderedChart?.scales?.x?.width}
-                    rightOffset={renderedChart?.scales?.x?.left}
-                    canvasHeight={renderedChart?.scales?.y?.height}
-                    renderedChart={renderedChart}
-                    currentTime={currentTime}
-                    totalSeconds={totalSeconds}
-                    totalWidth={totalWidth}
-                    title={title}
-                    type={type}
-                    store={store}
-                    currentSlab={currentSlab}
-                />
+                // (renderedChart && renderedChart !== undefined)
+                // &&
+                // <ChartRegionsCanvas
+                //     canvasWidth={renderedChart?.scales?.x?.width}
+                //     rightOffset={renderedChart?.scales?.x?.left}
+                //     canvasHeight={renderedChart?.scales?.y?.height}
+                //     renderedChart={renderedChart}
+                //     currentTime={currentTime}
+                //     totalSeconds={totalSeconds}
+                //     totalWidth={totalWidth}
+                //     title={title}
+                //     type={type}
+                //     store={store}
+                //     currentSlab={currentSlab}
+                // />
             }
             {
                 (renderedChart && renderedChart !== undefined)
@@ -387,6 +496,10 @@ const CanvasChart = inject('store')(observer(({ chartData, totalSeconds, end, cu
                     totalWidth={totalWidth}
                     title={title}
                     type={type}
+                    timeToMove={timeToMove}
+                    chartData={chartData}
+                    getLinePixelPosition={getLinePixelPosition}
+                    offset={offset}
                 />
             }
         </Block>
